@@ -22,28 +22,52 @@ using namespace std;
 #define div60 0.0166666667
 
 /*CUDA Code*/
-__global__ void PT1(ftype* vx, ftype* vy, ftype* alpha, ftype* beta, int* index,  ftype* kvx, ftype* kvy, ftype* etan,  ftype* Helem, ftype* areas, bool* isice, ftype* Eta_nbe, ftype* rheology_B, ftype n_glen, ftype eta_0, ftype rele,int nbe){ 
-    for(int ix = blockIdx.x * blockDim.x + threadIdx.x; ix<nbe; ix += blockDim.x * gridDim.x){ 
-       
+/* 
+Inputs: ftype* vx
+        ftype* vy 
+        ftype* alpha 
+        ftype* beta
+        int* index
+        ftype* kvx
+        ftype* kvy
+        ftype* etan
+        ftype* Helem
+        ftype* areas
+        bool* isice
+        ftype* Eta_nbe
+        ftype* rheology_B
+        ftype n_glen
+        ftype eta_0
+        ftype rele
+        int nbe
 
-        if (isice[ix]){
+Outputs: ftype* kvx
+         ftype* kvy
+         ftype* etan
+         ftype* Eta_nbe
+*/ 
+__global__ void PT1(ftype* vx, ftype* vy, ftype* alpha, ftype* beta, int* index,  ftype* kvx, ftype* kvy, ftype* etan,  ftype* Helem, ftype* areas, bool* isice, ftype* Eta_nbe, ftype* rheology_B, ftype n_glen, ftype eta_0, ftype rele,int nbe){ 
+    
+    for (int ix = blockIdx.x * blockDim.x + threadIdx.x; ix<nbe; ix += blockDim.x * gridDim.x) { 
+       
+        if (isice[ix]) {
 
             ftype Localalpha[3];
             ftype Localbeta[3];
             ftype Localvx[3];
             ftype Localvy[3];
         
-            for(int i=0; i<3; i++){
-            Localalpha[i] =  alpha[ix*3+i];
-            Localbeta[i] =   beta[ix*3+i];
-            Localvx[i] =  vx[index[ix*3+i]-1];
-            Localvy[i] =  vy[index[ix*3+i]-1];
+            for(int i = 0; i < 3; i++) {
+            Localalpha[i] = alpha[ix*3+i];
+            Localbeta[i]  = beta[ix*3+i];
+            Localvx[i]    = vx[index[ix*3+i]-1];
+            Localvy[i]    = vy[index[ix*3+i]-1];
             }
         
-            ftype dvxdx =  Localvx[0]*Localalpha[0] + Localvx[1]*Localalpha[1] + Localvx[2]*Localalpha[2];
-            ftype dvxdy =  Localvx[0]* Localbeta[0] + Localvx[1]* Localbeta[1] + Localvx[2]* Localbeta[2];
-            ftype dvydx =  Localvy[0]*Localalpha[0] + Localvy[1]*Localalpha[1] + Localvy[2]*Localalpha[2];
-            ftype dvydy =  Localvy[0]* Localbeta[0] + Localvy[1]* Localbeta[1] + Localvy[2]* Localbeta[2];
+            ftype dvxdx = Localvx[0]*Localalpha[0] + Localvx[1]*Localalpha[1] + Localvx[2]*Localalpha[2];
+            ftype dvxdy = Localvx[0]* Localbeta[0] + Localvx[1]* Localbeta[1] + Localvx[2]* Localbeta[2];
+            ftype dvydx = Localvy[0]*Localalpha[0] + Localvy[1]*Localalpha[1] + Localvy[2]*Localalpha[2];
+            ftype dvydy = Localvy[0]* Localbeta[0] + Localvy[1]* Localbeta[1] + Localvy[2]* Localbeta[2];
 
             ftype  eps_xx = dvxdx;
             ftype  eps_yy = dvydy;
@@ -51,208 +75,279 @@ __global__ void PT1(ftype* vx, ftype* vy, ftype* alpha, ftype* beta, int* index,
             ftype  EII2   = eps_xx*eps_xx + eps_yy*eps_yy + eps_xy*eps_xy + eps_xx*eps_yy;
             ftype  eta_it = 5e+13;
 
-         if (EII2>0.) eta_it = rheology_B[ix]/(2*__powf(EII2,(n_glen-1.)/(2*n_glen)));
-
+        if (EII2>0.) eta_it = rheology_B[ix]/(2*__powf(EII2,(n_glen-1.)/(2*n_glen)));
         
-                etan[ix] = min(__expf(rele*__logf(eta_it) + (1.0-rele)*__logf(etan[ix])),eta_0*1e5);
+            etan[ix] = min(__expf(rele*__logf(eta_it) + (1.0-rele)*__logf(etan[ix])),eta_0*1e5);
 
-                //Viscous Deformation//
-                ftype tmp_2hele_etan_areas = 2 * Helem[ix] * etan[ix] *areas[ix];
-                for (int i = 0; i < 3; i++){
-                        kvx[ix*3+i] = tmp_2hele_etan_areas * ((2 * eps_xx + eps_yy) * Localalpha[i]   +  eps_xy *  Localbeta[i] );
-                        kvy[ix*3+i] = tmp_2hele_etan_areas * ((2 * eps_yy + eps_xx) * Localbeta[i]    +  eps_xy * Localalpha[i] );            
+            //Viscous Deformation//
+            ftype tmp_2hele_etan_areas = 2 * Helem[ix] * etan[ix] *areas[ix];
+
+            for (int i = 0; i < 3; i++) {
+                kvx[ix*3+i] = tmp_2hele_etan_areas * ((2 * eps_xx + eps_yy) * Localalpha[i]   +  eps_xy *  Localbeta[i] );
+                kvy[ix*3+i] = tmp_2hele_etan_areas * ((2 * eps_yy + eps_xx) * Localbeta[i]    +  eps_xy * Localalpha[i] );            
             }
         }
-
-   
         Eta_nbe[ix] = etan[ix]*areas[ix];
     }
-
 }
 
+/* 
+Inputs: ftype* kvx
+        ftype* groundedratio
+        ftype* areas
+        int* index
+        ftype* alpha2
+        ftype* vx
+        ftype* gr_a_alpha2
+        bool* isice
+        int nbe
 
+Outputs: ftype* kvx
+*/
 __global__ void PT2_x(ftype* kvx, ftype* groundedratio, ftype* areas, int* index, ftype* alpha2, ftype* vx, ftype* gr_a_alpha2, bool* isice,  int nbe){
 
-    for(int ix = blockIdx.x * blockDim.x + threadIdx.x; ix < nbe; ix += blockDim.x * gridDim.x){
+    for (int ix = blockIdx.x * blockDim.x + threadIdx.x; ix < nbe; ix += blockDim.x * gridDim.x) {
         /*Add basal friction*/
-        if (groundedratio[ix] > 0.){
+        if (groundedratio[ix] > 0.) {
+
             int n3 = ix * 3;
 
-       ftype myLocalIndex[3][3];
-            for (int i = 0; i < 3; i++){
-              	for (int j = 0; j < 3; j++){
-                      int j_index = index[n3 + j] - 1;
-                      myLocalIndex[i][j] = gr_a_alpha2[n3 + i] * vx[j_index];
+            ftype myLocalIndex[3][3];
+
+            for (int i = 0; i < 3; i++) {
+                for (int j = 0; j < 3; j++) {
+                    int j_index = index[n3 + j] - 1;
+                    myLocalIndex[i][j] = gr_a_alpha2[n3 + i] * vx[j_index];
                 }
             }
 
-
             ftype tempOutput[3];
-            for (int k = 0; k < 3; k++){
+
+            for (int k = 0; k < 3; k++) {
                 tempOutput[k] = kvx[n3 + k];
             }   
 
-
             ftype division;
-            for (int k = 0; k < 3; k++){
-                for (int i = 0; i < 3; i++){
-                    for (int j = 0; j < 3; j++){
-                      	ftype temp = myLocalIndex[i][j];
+            for (int k = 0; k < 3; k++) {
+                for (int i = 0; i < 3; i++) {
+                    for (int j = 0; j < 3; j++) {
+                        ftype temp = myLocalIndex[i][j];
 
-                        if (i == j && j == k){
-			    division = div10;
-                        } else if ((i!=j) && (j!=k) && (k!=i)){
-			    division = div60;
-                        } else{
-			    division = div30;
-                        }
-			tempOutput[k] = isice[ix] * tempOutput[k] + temp*division;
+                        if (i == j && j == k) { division = div10; } 
+                        else if ((i!=j) && (j!=k) && (k!=i)) { division = div60; } 
+                        else { division = div30; }
+
+                        tempOutput[k] = isice[ix] * tempOutput[k] + temp*division;
                     }
                 }
             } 
-        
-             for (int k = 0; k < 3; k++){
+            for (int k = 0; k < 3; k++) {
                 kvx[n3 + k] = tempOutput[k];
             }  
         }
     }
 }
 
+/* 
+Inputs: ftype* kvy
+        ftype* groundedratio
+        ftype* areas
+        int* index
+        ftype* alpha2
+        ftype* vy
+        ftype* gr_a_alpha2
+        bool* isice
+        int nbe
+
+Outputs: ftype* kvy
+*/
 __global__ void PT2_y(ftype* kvy, ftype* groundedratio, ftype* areas, int* index, ftype* alpha2, ftype* vy, ftype* gr_a_alpha2, bool* isice,  int nbe){
 
-   for(int ix = blockIdx.x * blockDim.x + threadIdx.x; ix < nbe; ix += blockDim.x * gridDim.x){
+    for (int ix = blockIdx.x * blockDim.x + threadIdx.x; ix < nbe; ix += blockDim.x * gridDim.x) {
         /*Add basal friction*/
-        if (groundedratio[ix] > 0.){
+        if (groundedratio[ix] > 0.) {
+
             int n3 = ix * 3;
 
             ftype myLocalIndex[3][3];
-            for (int i = 0; i < 3; i++){
-                for (int j = 0; j < 3; j++){
-                      int j_index = index[n3 + j] - 1;
-                      myLocalIndex[i][j] = gr_a_alpha2[n3 + i] * vy[j_index];
+
+            for (int i = 0; i < 3; i++) {
+                for (int j = 0; j < 3; j++) {
+                    int j_index = index[n3 + j] - 1;
+                    myLocalIndex[i][j] = gr_a_alpha2[n3 + i] * vy[j_index];
                 }
             }
 
-          ftype tempOutput[3];
-            for (int k = 0; k < 3; k++){
+            ftype tempOutput[3];
+
+            for (int k = 0; k < 3; k++) {
                 tempOutput[k] = kvy[n3 + k];
             }
 
             ftype division;
-            for (int k = 0; k < 3; k++){
-                for (int i = 0; i < 3; i++){
-                    for (int j = 0; j < 3; j++){
+
+            for (int k = 0; k < 3; k++) {
+                for (int i = 0; i < 3; i++) {
+                    for (int j = 0; j < 3; j++) {
+
                       	ftype temp = myLocalIndex[i][j];
 
-                        if (i == j && j == k){
-			    division = div10;
-                        } else if ((i!=j) && (j!=k) && (k!=i)){
-			    division = div60;
-                        } else{
-			    division = div30;
-                        }
-			tempOutput[k] = isice[ix] * tempOutput[k] + temp*division;
+                        if (i == j && j == k) { division = div10; } 
+                        else if ((i!=j) && (j!=k) && (k!=i)) { division = div60; } 
+                        else { division = div30; }
+
+			            tempOutput[k] = isice[ix] * tempOutput[k] + temp*division;
                     }
                 }
             } 
-
-              for (int k = 0; k < 3; k++){
-                kvy[n3 + k] = tempOutput[k];
-            }  
-  
-
+            for (int k = 0; k < 3; k++) { kvy[n3 + k] = tempOutput[k]; } 
         }
     }
 }
 
-//Moving to the next kernel: cannot update kvx and perform indirect access, lines 474 and 475, in the same kernel//
-__global__ void PT3(ftype* kvx, ftype* kvy, ftype* Eta_nbe,  ftype* eta_nbv,  int* connectivity, int* columns, ftype* weights, ftype* ML, ftype* KVx, ftype* KVy, ftype* Fvx, ftype* Fvy, ftype* dVxdt, ftype* dVydt, ftype* resolx, ftype* resoly, ftype* H, ftype* vx, ftype* vy, ftype* spcvx, ftype* spcvy, ftype* rho_ML, ftype rho, ftype damp, ftype relaxation, ftype eta_b, int nbv){ 
- 
-    ftype ResVx;
-    ftype ResVy;
-    ftype dtVx;
-    ftype dtVy;
+/* 
+Inputs: ftype* kvx
+        ftype* kvy
+        ftype* Eta_nbe
+        ftype* eta_nbv
+        int* connectivity
+        int* columns
+        ftype* KVx
+        ftype* KVy
+        int nbv
+
+Outputs: ftype* KVx
+         ftype* KVy
+         ftype* eta_nbv
+*/ 
+// Moving to the next kernel: cannot update kvx and perform indirect access, lines 474 and 475, in the same kernel
+__global__ void PT3_a(ftype* kvx, ftype* kvy, ftype* Eta_nbe, ftype* eta_nbv, int* connectivity, int* columns, ftype* KVx, ftype* KVy, int nbv) {
 	
-    for(int ix = blockIdx.x * blockDim.x + threadIdx.x; ix<nbv; ix += blockDim.x * gridDim.x){
+    for (int ix = blockIdx.x * blockDim.x + threadIdx.x; ix<nbv; ix += blockDim.x * gridDim.x) {
 
         KVx[ix] = 0.;
         KVy[ix] = 0.;
-
         int localColumns[8];
         int localConnectivity[8];
-        for(int j=0; j<8; j++){
+
+        for (int j = 0; j < 8; j++) {
 	        localConnectivity[j] = connectivity[(ix * 8  + j)];
 	        localColumns[j] = columns[(ix * 8  + j)];
         } 
-      
-	    
-           ftype tmp_KVx = KVx[ix];
-           ftype tmp_KVy = KVy[ix];
-           ftype tmp_eta_nbv = eta_nbv[ix];
 
-          for(int j=0;j<8;j++){
+        for (int j = 0; j < 8; j++) {
         
-            if (localConnectivity[j] != 0){
-                tmp_KVx = tmp_KVx + kvx[((localConnectivity[j])-1) *3 + ((localColumns[(j)]))];
-                tmp_KVy = tmp_KVy + kvy[((localConnectivity[j])-1) *3 + ((localColumns[(j)]))];
+            if (localConnectivity[j] != 0) {
+                KVx[ix] = KVx[ix] + kvx[((localConnectivity[j])-1) *3 + ((localColumns[(j)]))];
+                KVy[ix] = KVy[ix] + kvy[((localConnectivity[j])-1) *3 + ((localColumns[(j)]))];
+                eta_nbv[ix] = eta_nbv[ix] + Eta_nbe[localConnectivity[j]-1];
             }
-              
-            if (localConnectivity[j] != 0){
-                tmp_eta_nbv = tmp_eta_nbv + Eta_nbe[localConnectivity[j]-1];
-            }
-            else{break;}
-        }    
+            else { break; }
+        }
+    }
+}
 
-        KVx[ix] = tmp_KVx;
-        KVy[ix] = tmp_KVy;
+/* 
+Inputs: ftype* KVx
+        ftype* KVy
+        ftype* Fvx
+        ftype* Fvy
+        ftype* dVxdt
+        ftype* dVydt
+        ftype* rho_ML
+        ftype damp
+        int nbv
 
-        eta_nbv[ix] =tmp_eta_nbv/weights[ix];   
+Outputs: ftype* dVxdt
+         ftype* dVydt
+*/  
+__global__ void PT3_b(ftype* KVx, ftype* KVy, ftype* Fvx, ftype* Fvy, ftype* dVxdt, ftype* dVydt, ftype* rho_ML, ftype damp, int nbv) {
 
+    ftype ResVx; 
+    ftype ResVy;  
+
+    for (int ix = blockIdx.x * blockDim.x + threadIdx.x; ix<nbv; ix += blockDim.x * gridDim.x) { 
         /*1. Get time derivative based on residual (dV/dt)*/
-	    ResVx =  (-KVx[ix] + Fvx[ix])/rho_ML[ix];
-	    ResVy =  (-KVy[ix] + Fvy[ix])/rho_ML[ix];
+        ResVx =  (-KVx[ix] + Fvx[ix])/rho_ML[ix];
+        ResVy =  (-KVy[ix] + Fvy[ix])/rho_ML[ix];
         dVxdt[ix] = dVxdt[ix]*damp + ResVx;
         dVydt[ix] = dVydt[ix]*damp + ResVy;
+    }
+}
 
-    
+/* 
+Inputs: ftype* eta_nbv
+        ftype* weights
+        ftype* resolx
+        ftype* resoly
+        ftype rho
+        ftype eta_b
+        int nbv
+
+Outputs: The values of dtVx and dtVy are calculated but not stored, so these results will need to be used or analyzed outside the loop. **nbv parameter
+*/  
+__global__ void PT3_c(ftype* eta_nbv, ftype* weights, ftype* resolx, ftype* resoly, ftype rho, ftype eta_b, int nbv, ftype dtVx, ftype dtVy) {
+
+    for (int ix = blockIdx.x * blockDim.x + threadIdx.x; ix<nbv; ix += blockDim.x * gridDim.x) {
         /*2. Explicit CFL time step for viscous flow, x and y directions*/
+        eta_nbv[ix] = eta_nbv[ix]/weights[ix];
         ftype tmp_4eta = 4*eta_nbv[ix]*(1.+eta_b)*4.1;
+        dtVx = rho*resolx[ix]*resolx[ix]/tmp_4eta;  
+        dtVy = rho*resoly[ix]*resoly[ix]/tmp_4eta;
+    }
+}
 
-        dtVx[ix] = rho*resolx[ix]*resolx[ix]/tmp_4eta;  
-        dtVy[ix] = rho*resoly[ix]*resoly[ix]/tmp_4eta; 
+/* 
+Inputs: ftype* dVxdt
+        ftype* dVydt
+        ftype* vx
+        ftype* vy
+        ftype* spcvx
+        ftype* spcvy
+        ftype relaxation
+        int nbv
 
+Outputs: ftype* dVxdt
+         ftype* dVydt
+         ftype* vx
+         ftype* vy
+
+Note: The variables dtVx and dtVy are used in the velocity update, 
+      but they are not defined within the kernel. Should be provided 
+      as constants or defined elsewhere in the code.
+*/  
+__global__ void PT3_d(ftype* dVxdt, ftype* dVydt, ftype* vx, ftype* vy, ftype* spcvx, ftype* spcvy, ftype relaxation, int nbv, ftype dtVx, ftype dtVy) {
+
+    for (int ix = blockIdx.x * blockDim.x + threadIdx.x; ix<nbv; ix += blockDim.x * gridDim.x) {
         /*3. velocity update, vx(new) = vx(old) + change in vx, Similarly for vy*/
         vx[ix] = vx[ix] + relaxation*dVxdt[ix]*dtVx;
         vy[ix] = vy[ix] + relaxation*dVydt[ix]*dtVy;
 
         /*Apply Dirichlet boundary condition*/
-        if (!isnan(spcvx[ix])){
+        if (!isnan(spcvx[ix])) {
             vx[ix]    = spcvx[ix];
-             dVxdt[ix] = 0.;
+            dVxdt[ix] = 0.;
         }
-        if (!isnan(spcvy[ix])){
+        if (!isnan(spcvy[ix])) {
             vy[ix]    = spcvy[ix];
             dVydt[ix] = 0.;
         }
     }
 }
 
-
-
 /*Main*/
-int main(){
+int main() {
 
-      /*Open input binary file*/
+    /*Open input binary file*/
     const char* inputfile  = "./JKS8e4.bin";
     const char* outputfile = "./output.outbin";
     FILE* fid = fopen(inputfile,"rb");
     if(fid==NULL) std::cerr<<"could not open file " << inputfile << " for binary reading or writing";
 
-
     /*Get All we need from binary file*/
-    int    nbe,nbv,M,N;
-    ftype g,rho,rho_w,yts;
-    int    *index           = NULL;
+    int   nbe, nbv, M, N;
+    ftype g, rho, rho_w, yts;
+    int   *index           = NULL;
     ftype *spcvx           = NULL;
     ftype *spcvy           = NULL;
     ftype *x               = NULL;
@@ -288,7 +383,7 @@ int main(){
     FetchData(fid,&friction,&M,&N,"md.friction.coefficient");
 
     /*Close input file*/
-    if(fclose(fid)!=0) std::cerr<<"could not close file " << inputfile;
+    if(fclose(fid)!=0) std::cerr << "could not close file " << inputfile;
 
     /*Constants*/
     ftype n_glen     = 3.;
@@ -296,8 +391,8 @@ int main(){
     ftype rele       = rela;  
     ftype eta_b      = 0.5;
     ftype eta_0      = 1.e+14/2.;
-    int    niter     = 5e6; 
-    int    nout_iter  = 100; 
+    int   niter      = 5e6; 
+    int   nout_iter  = 100; 
     ftype epsi       = 3.171e-7;
     ftype relaxation = stability; 
         
@@ -318,14 +413,19 @@ int main(){
     cudaDeviceReset(); cudaDeviceSetCacheConfig(cudaFuncCachePreferL1);  // set L1 to prefered
     printf("Process uses GPU with id %d.\n", gpu_id);
 
-
     /*Initial guesses (except vx and vy that we already loaded)*/
     ftype* etan = new ftype[nbe];
-    for(int i=0;i<nbe;i++) etan[i] = 1.e+14;
+    for (int i = 0; i < nbe; i++) etan[i] = 1.e+14;
     ftype* dVxdt = new ftype[nbv];
-    for(int i=0;i<nbv;i++) dVxdt[i] = 0.;
+    for (int i = 0; i < nbv; i++) dVxdt[i] = 0.;
     ftype* dVydt = new ftype[nbv];
-    for(int i=0;i<nbv;i++) dVydt[i] = 0.;
+    for (int i = 0; i < nbv; i++) dVydt[i] = 0.;
+
+    // add dtVx and dtVy 
+    ftype* dtVx = new ftype[nbv];
+    for (int i = 0; i < nbv; i++) dtVx[ix] = 0.;
+    ftype* dtVy = new ftype[nbv];
+    for (int i = 0; i < nbv; i++) dtVy[ix] = 0.;
 
     /*Manage derivatives once for all*/
     ftype* alpha   = NULL;
@@ -334,7 +434,6 @@ int main(){
     ftype* weights = NULL;
     NodalCoeffs(&areas,&alpha,&beta,index,x,y,nbe);
     Weights(&weights,index,areas,nbe,nbv);
-
 
     /*MeshSize*/
     ftype* resolx = new ftype[nbv];
@@ -347,30 +446,32 @@ int main(){
     derive_xy_elem(dsdx,dsdy,surface,index,alpha,beta,nbe);
     ftype* Helem      = new ftype[nbe];
     ftype* rheology_B = new ftype[nbe];
-    for(int i=0;i<nbe;i++){
+
+    for (int i=0;i<nbe;i++) {
         Helem[i]      = 1./3. * (H[index[i*3+0]-1] + H[index[i*3+1]-1] + H[index[i*3+2]-1]);
         rheology_B[i] = 1./3. * (rheology_B_temp[index[i*3+0]-1] + rheology_B_temp[index[i*3+1]-1] + rheology_B_temp[index[i*3+2]-1]);
     }
 
     //Initial viscosity//
-    ftype* dvxdx   = new ftype[nbe];
-    ftype* dvxdy   = new ftype[nbe];
-    ftype* dvydx   = new ftype[nbe];
-    ftype* dvydy   = new ftype[nbe];
+    ftype* dvxdx = new ftype[nbe];
+    ftype* dvxdy = new ftype[nbe];
+    ftype* dvydx = new ftype[nbe];
+    ftype* dvydy = new ftype[nbe];
 
     derive_xy_elem(dvxdx,dvxdy,vx,index,alpha,beta,nbe);
     derive_xy_elem(dvydx,dvydy,vy,index,alpha,beta,nbe);
 
-    for(int i=0;i<nbe;i++){
+    for (int i=0;i<nbe;i++) {
         ftype eps_xx = dvxdx[i];
         ftype eps_yy = dvydy[i];
         ftype eps_xy = .5*(dvxdy[i]+dvydx[i]);
         ftype EII2 = pow(eps_xx,2) + pow(eps_yy,2) + pow(eps_xy,2) + eps_xx*eps_yy;
         ftype eta_it = 1.e+14/2.;
+
         if (EII2>0.) eta_it = rheology_B[i]/(2*pow(EII2,(n_glen-1.)/(2*n_glen)));
 
         etan[i] = min(eta_it,eta_0*1e5);
-        if (isnan(etan[i])){ std::cerr<<"Found NaN in etan[i]"; return 1;}
+        if (isnan(etan[i])){ std::cerr<<"Found NaN in etan[i]"; return 1; }
     }
 
     /*Linear integration points order 3*/
@@ -382,88 +483,81 @@ int main(){
     ftype* Fvx           = new ftype[nbv];
     ftype* Fvy           = new ftype[nbv];
     ftype* groundedratio = new ftype[nbe];
-    bool*   isice         = new bool[nbe];     
+    bool*  isice         = new bool[nbe];     
     ftype level[3];      
 
-    for(int i=0;i<nbv;i++){
+    for (int i = 0; i < nbv; i++) {
         ML[i]  = 0.;
         Fvx[i] = 0.;
         Fvy[i] = 0.;
     }
-    for(int n=0;n<nbe;n++){
+    for (int n = 0; n < nbe; n++) {
         /*Lumped mass matrix*/
-        for(int i=0;i<3;i++){
-            for(int j=0;j<3;j++){
+        for (int i=0;i<3;i++) {
+            for (int j=0;j<3;j++) {
                 if (i==j)
-                 ML[index[n*3+j]-1] += areas[n]/6.;
+                ML[index[n*3+j]-1] += areas[n]/6.;
                 else
-                 ML[index[n*3+j]-1] += areas[n]/12.;
+                ML[index[n*3+j]-1] += areas[n]/12.;
             }
         }
         /*Is there ice at all in the current element?*/
         level[0] = ice_levelset[index[n*3+0]-1];
         level[1] = ice_levelset[index[n*3+1]-1];
         level[2] = ice_levelset[index[n*3+2]-1];
-        if (level[0]<0 || level[1]<0 || level[2]<0){
-            isice[n] = true;
-        }
-        else{
+        if (level[0]<0 || level[1]<0 || level[2]<0) { isice[n] = true; }
+        else {
             isice[n] = false;
-            for(int i=0;i<3;i++){
+            for(int i=0;i<3;i++) {
                 vx[index[n*3+i]-1] = 0.;
                 vy[index[n*3+i]-1] = 0.;
             }
             continue;
         }
         /*RHS, 'F ' Driving Stress*/
-        for(int i=0;i<3;i++){
-            for(int j=0;j<3;j++){
-                if (i==j){
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0;j < 3; j++) {
+                if (i==j) {
                     Fvx[index[n*3+i]-1] += -rho*g*H[index[n*3+j]-1]*dsdx[n]*areas[n]/6.;
                     Fvy[index[n*3+i]-1] += -rho*g*H[index[n*3+j]-1]*dsdy[n]*areas[n]/6.;
                 }
-                else{
+                else {
                     Fvx[index[n*3+i]-1] += -rho*g*H[index[n*3+j]-1]*dsdx[n]*areas[n]/12.;
                     Fvy[index[n*3+i]-1] += -rho*g*H[index[n*3+j]-1]*dsdy[n]*areas[n]/12.;
                 }
             }
         }
     }
-
-   
-
     /*RHS (Water pressure at the ice front)*/
-    for(int n=0;n<nbe;n++){
+    for (int n = 0; n < nbe; n++) {
         /*Determine if there is an ice front*/
         level[0] = ice_levelset[index[n*3+0]-1];
         level[1] = ice_levelset[index[n*3+1]-1];
         level[2] = ice_levelset[index[n*3+2]-1];
         int count = 0;
-        for(int i=0;i<3;i++) if (level[i]<0.) count++;
-        if (count==1){
+        for (int i = 0; i < 3; i++) if (level[i]<0.) count++;
+        if (count==1) {
             /*Ok this element has an ice front, get indices of the 2 vertices*/
             int seg1[2] = {index[n*3+0]-1,index[n*3+1]-1};
             int seg2[2] = {index[n*3+1]-1,index[n*3+2]-1};
             int seg3[2] = {index[n*3+2]-1,index[n*3+0]-1};
             int pairids[2];
-            if (ice_levelset[seg1[0]]>=0 && ice_levelset[seg1[1]]>=0){
+            if (ice_levelset[seg1[0]]>=0 && ice_levelset[seg1[1]]>=0) {
                 pairids[0] = seg1[0]; pairids[1] = seg1[1];
             }
-            else if (ice_levelset[seg2[0]]>=0 && ice_levelset[seg2[1]]>=0){
+            else if (ice_levelset[seg2[0]]>=0 && ice_levelset[seg2[1]]>=0) {
                 pairids[0] = seg2[0]; pairids[1] = seg2[1];
             }
-            else if (ice_levelset[seg3[0]]>=0 && ice_levelset[seg3[1]]>=0){
+            else if (ice_levelset[seg3[0]]>=0 && ice_levelset[seg3[1]]>=0) {
                 pairids[0] = seg3[0]; pairids[1] = seg3[1];
             }
-            else{
-                std::cerr<<"case not supported";
-            }
+            else { std::cerr << "case not supported"; }
             /*Get normal*/
             ftype len = sqrt(pow(x[pairids[1]]-x[pairids[0]],2) + pow(y[pairids[1]]-y[pairids[0]],2) );
             ftype nx  = +(y[pairids[1]]-y[pairids[0]])/len;
             ftype ny  = -(x[pairids[1]]-x[pairids[0]])/len;
             /*RHS*/
-            for(int gg=0;gg<2;gg++){
+            for (int gg = 0; gg < 2; gg++) {
                 ftype phi1 = (1.0 -xg3[gg])/2.;
                 ftype phi2 = (1.0 +xg3[gg])/2.;
                 ftype bg = base[pairids[0]]*phi1 + base[pairids[1]]*phi2;
@@ -479,38 +573,36 @@ int main(){
         level[0] = ocean_levelset[index[n*3+0]-1];
         level[1] = ocean_levelset[index[n*3+1]-1];
         level[2] = ocean_levelset[index[n*3+2]-1];
-        if (level[0]>=0. && level[1]>=0. && level[2]>=0.){
+        if (level[0]>=0. && level[1]>=0. && level[2]>=0.) {
             /*Completely grounded*/
             groundedratio[n]=1.;
         }
-        else if (level[0]<=0. && level[1]<=0. && level[2]<=0.){
+        else if (level[0]<=0. && level[1]<=0. && level[2]<=0.) {
             /*Completely floating*/
             groundedratio[n]=0.;
         }
-        else{
+        else {
             /*Partially floating,*/
             ftype s1,s2;
-            if (level[0]*level[1]>0){/*Nodes 0 and 1 are similar, so points must be found on segment 0-2 and 1-2*/
+            if (level[0]*level[1]>0) {/*Nodes 0 and 1 are similar, so points must be found on segment 0-2 and 1-2*/
                 s1=level[2]/(level[2]-level[1]);
                 s2=level[2]/(level[2]-level[0]);
             }
-            else if (level[1]*level[2]>0){ /*Nodes 1 and 2 are similar, so points must be found on segment 0-1 and 0-2*/
+            else if (level[1]*level[2]>0) { /*Nodes 1 and 2 are similar, so points must be found on segment 0-1 and 0-2*/
                 s1=level[0]/(level[0]-level[1]);
                 s2=level[0]/(level[0]-level[2]);
             }
-            else if (level[0]*level[2]>0){/*Nodes 0 and 2 are similar, so points must be found on segment 1-0 and 1-2*/
+            else if (level[0]*level[2]>0) {/*Nodes 0 and 2 are similar, so points must be found on segment 1-0 and 1-2*/
                 s1=level[1]/(level[1]-level[0]);
                 s2=level[1]/(level[1]-level[2]);
             }
-            else{
-                std::cerr<<"should not be here...";
-            }
+            else { std::cerr << "should not be here..."; }
 
-            if (level[0]*level[1]*level[2]>0.){
+            if (level[0]*level[1]*level[2]>0.) {
                 /*two nodes floating, inner triangle is grounded*/
                 groundedratio[n]= s1*s2;
             }
-            else{
+            else {
                 /*one node floating, inner triangle is floating*/
                 groundedratio[n]= (1.-s1*s2);
             }
@@ -519,7 +611,7 @@ int main(){
 
     /*Finally add calculation of friction coefficient*/
     ftype* alpha2 = new ftype[nbv];
-    for(int i=0;i<nbv;i++){
+    for (int i = 0; i < nbv; i++) {
         /*Compute effective pressure*/
         ftype p_ice   = g*rho*H[i];
         ftype p_water = -rho_w*g*base[i];
@@ -532,11 +624,11 @@ int main(){
     //prepare head and next vectors for chain algorithm, at this point we have not seen any of the elements, so just set the head to -1 (=stop)
     int* head = new int[nbv];
     int* next  = new int[3*nbe];
-    for(int i=0;i<nbv;i++) head[i] = -1;
+    for (int i = 0; i < nbv; i++) head[i] = -1;
 
     //Now construct the chain
-    for(int k=0;k<nbe;k++){
-        for(int j=0;j<3;j++){
+    for (int k = 0; k < nbe; k++) {
+        for (int j = 0; j < 3; j++) {
             int i;
             int p = 3*k+j;       //unique linear index of current vertex in index
             i = index[p];
@@ -551,25 +643,25 @@ int main(){
     int* connectivity = new int[nbv*MAXCONNECT];
     int* columns = new int[nbv*MAXCONNECT];
 
-    for(int i=0;i<nbv;i++){
+    for (int i = 0; i < nbv; i++) {
 
         /*Go over all of the elements connected to node I*/
         int count = 0;
         int p=head[i];
 
         //for (int p = head[i]; p != -1; p = next[p]){
-        while (p!= -1){
+        while (p!= -1) {
 
             int k = p / 3 + 1;     //”row" in index
             int j = (p % 3) - 1;   //"column" in index
 
-            if (j==-1){
+            if (j==-1) {
                 j=2;
                 k= k -1;}
 
             //sanity check
-            if (index[p-1] !=i+1){
-                std::cout << "Error occurred"  << std::endl;;
+            if (index[p-1] !=i+1) {
+                std::cout << "Error occurred" << std::endl;;
             }
 
             //enter element in connectivity matrix
@@ -580,25 +672,25 @@ int main(){
         }
     }
   
-
     ftype* device_maxvalx = new ftype[GRID_Xv];
     ftype* device_maxvaly = new ftype[GRID_Xv];
-    for(int i=0;i<GRID_Xv;i++) device_maxvalx[i] = 0.;
-    for(int i=0;i<GRID_Xv;i++) device_maxvaly[i] = 0.;
+    for (int i=0;i<GRID_Xv;i++) device_maxvalx[i] = 0.;
+    for (int i=0;i<GRID_Xv;i++) device_maxvaly[i] = 0.;
 
     ftype* rho_ML = new ftype[nbv];
-    for (int i = 0;i < nbv ;i++){
+
+    for (int i = 0;i < nbv ;i++) {
 	    rho_ML[i] = rho*max(60.0,H[i])*ML[i];
     }
 
-
     ftype* gr_a_alpha2 = new ftype[nbe*3];
-    for(int i = 0;i < nbe; i++){
-         if (groundedratio[i] > 0.){
+
+    for (int i = 0;i < nbe; i++) {
+         if (groundedratio[i] > 0.) {
             int n3 = i * 3;
             ftype tmp_gr_a = groundedratio[i] * areas[i];
 
-            for (int j = 0; j < 3; j++){
+            for (int j = 0; j < 3; j++) {
                  int i_index = index[n3 + j] - 1;
                  gr_a_alpha2[n3 + j] =  tmp_gr_a * alpha2[i_index];
             }
@@ -626,7 +718,6 @@ int main(){
     cudaMalloc(&d_vy, nbv*sizeof(ftype));
     cudaMemcpy(d_vy, vy, nbv*sizeof(ftype), cudaMemcpyHostToDevice);  
     
- 
     ftype *d_alpha;
     cudaMalloc(&d_alpha, nbe*3*sizeof(ftype));
     cudaMemcpy(d_alpha, alpha, nbe*3*sizeof(ftype), cudaMemcpyHostToDevice);
@@ -674,6 +765,14 @@ int main(){
     ftype *d_dVydt;
     cudaMalloc(&d_dVydt, nbv*sizeof(ftype));
     cudaMemcpy(d_dVydt, dVydt, nbv*sizeof(ftype), cudaMemcpyHostToDevice); 
+
+    ftype *d_dtVx;
+    cudaMalloc(&d_dtVx, nbv*sizeof(ftype));
+    cudaMemcpy(d_dtVx, dtVx, nbv*sizeof(ftype), cudaMemcpyHostToDevice); 
+
+    ftype *d_dtVy;
+    cudaMalloc(&d_dtVy, nbv*sizeof(ftype));
+    cudaMemcpy(d_dtVy, dtVy, nbv*sizeof(ftype), cudaMemcpyHostToDevice); 
 
     ftype *d_resolx;
     cudaMalloc(&d_resolx, nbv*sizeof(ftype));
@@ -764,38 +863,47 @@ int main(){
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
 
-
     /*Main loop*/
-    std::cout<<"Starting PT loop, nbe="<<nbe<<", nbv="<<nbv<<std::endl; 
+    std::cout << "Starting PT loop, nbe = " << nbe << ", nbv = " << nbv << std::endl; 
     int iter;
     ftype iterror;
-    for(iter=1;iter<=niter;iter++){
+
+    for (iter = 1; iter <= niter; iter++) {
       
-       if (iter==11) cudaEventRecord(start);
+        if (iter==11) cudaEventRecord(start);
 
-        PT1<<<gride, blocke, 0, stream1>>>(d_vx, d_vy, d_alpha, d_beta, d_index, kvx,  kvy, d_etan, d_Helem, d_areas, d_isice, Eta_nbe, d_rheology_B, n_glen, eta_0, rele, nbe);
-        cudaStreamSynchronize(stream1);
+            PT1<<<gride, blocke, 0, stream1>>>(d_vx, d_vy, d_alpha, d_beta, d_index, kvx,  kvy, d_etan, d_Helem, d_areas, d_isice, Eta_nbe, d_rheology_B, n_glen, eta_0, rele, nbe);
+            cudaStreamSynchronize(stream1);
 
-        PT2_x<<<gride, blocke, 0, stream1>>>(kvx, d_groundedratio, d_areas, d_index, d_alpha2, d_vx, d_gr_a_alpha2, d_isice, nbe);
-        cudaStreamSynchronize(stream1);
-        PT2_y<<<gride, blocke, 0, stream2>>>(kvy, d_groundedratio, d_areas, d_index, d_alpha2, d_vy, d_gr_a_alpha2, d_isice, nbe);
-        cudaStreamSynchronize(stream2);
-       
+            PT2_x<<<gride, blocke, 0, stream1>>>(kvx, d_groundedratio, d_areas, d_index, d_alpha2, d_vx, d_gr_a_alpha2, d_isice, nbe);
+            PT2_y<<<gride, blocke, 0, stream2>>>(kvy, d_groundedratio, d_areas, d_index, d_alpha2, d_vy, d_gr_a_alpha2, d_isice, nbe);
+            cudaStreamSynchronize(stream1);
+            cudaStreamSynchronize(stream2);
 
-        PT3<<<gridv, blockv, 0, stream1>>>(kvx, kvy, Eta_nbe, eta_nbv, d_connectivity, d_columns, d_weights, d_ML, KVx, KVy, d_Fvx, d_Fvy, d_dVxdt, d_dVydt, d_resolx, d_resoly, d_H, d_vx, d_vy, d_spcvx, d_spcvy, d_rho_ML, rho, damp, relaxation, eta_b, nbv);
-        cudaStreamSynchronize(stream1);
+            PT3_a<<<gridv, blockv, 0, stream1>>>(kvx, kvy, Eta_nbe, eta_nbv, connectivity, columns, KVx, KVy, nbv);
+            cudaStreamSynchronize(stream1);
 
-       if ((iter % nout_iter) == 0){
+            PT3_b<<<gridv, blockv, 0, stream1>>>(KVx, KVy, Fvx, Fvy, dVxdt, dVydt, rho_ML, damp, nbv);
+            PT3_c<<<gridv, blockv, 0, stream2>>>(eta_nbv, weights, resolx, resoly, rho, eta_b, dtVx, dtVy, nbv);
+            cudaStreamSynchronize(stream1);
+            cudaStreamSynchronize(stream2);
+
+            PT3_d<<<gridv, blockv, 0, stream1>>>(dVxdt, dVydt, vx, vy, spcvx, spcvy, relaxation, dtVx, dtVy, nbv); 
+            cudaStreamSynchronize(stream1);
+
+        if ((iter % nout_iter) == 0) {
+
             //Get final error estimate//
             __device_max_x(dVxdt); 
             __device_max_y(dVydt);
-            if (isnan(device_MAXx) || isnan(device_MAXy)) {break;}
+
+            if (isnan(device_MAXx) || isnan(device_MAXy)) { break; }
             else {
-            iterror = max(device_MAXx, device_MAXy);
-            std::cout<<"iter="<<iter<<", err="<<iterror<<std::endl;
-            if ((iterror < epsi) && (iter > 100)) break;
-       } 
-      }  
+                iterror = max(device_MAXx, device_MAXy);
+                std::cout<<"iter="<<iter<<", err="<<iterror<<std::endl;
+                if ((iterror < epsi) && (iter > 100)) break;
+            } 
+        }  
     }
 
     cudaEventRecord(stop);
@@ -839,6 +947,8 @@ int main(){
     delete [] etan;
     delete [] dVxdt;
     delete [] dVydt;
+    delete [] dtVx;
+    delete [] dtVy;
     delete [] alpha;
     delete [] beta;
     delete [] areas;
@@ -871,6 +981,8 @@ int main(){
     cudaFree(d_Fvy);
     cudaFree(d_dVxdt);
     cudaFree(d_dVydt);
+    cudaFree(d_dtVx);
+    cudaFree(d_dtVy);
     cudaFree(d_resolx);
     cudaFree(d_resoly);
     cudaFree(d_H);
