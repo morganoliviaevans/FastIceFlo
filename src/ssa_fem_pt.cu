@@ -292,8 +292,8 @@ __global__ void PT3_c(ftype* eta_nbv, ftype* weights, ftype* resolx, ftype* reso
         /*2. Explicit CFL time step for viscous flow, x and y directions*/
         eta_nbv[ix] = eta_nbv[ix]/weights[ix];
         ftype tmp_4eta = 4*eta_nbv[ix]*(1.+eta_b)*4.1;
-        dtVx = rho*resolx[ix]*resolx[ix]/tmp_4eta;  
-        dtVy = rho*resoly[ix]*resoly[ix]/tmp_4eta;
+        dtVx[ix] = rho*resolx[ix]*resolx[ix]/tmp_4eta;  
+        dtVy[ix] = rho*resoly[ix]*resoly[ix]/tmp_4eta; 
     }
 }
 
