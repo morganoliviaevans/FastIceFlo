@@ -286,7 +286,7 @@ Inputs: ftype* eta_nbv
 
 Outputs: The values of dtVx and dtVy are calculated but not stored, so these results will need to be used or analyzed outside the loop. **nbv parameter
 */  
-__global__ void PT3_c(ftype* eta_nbv, ftype* weights, ftype* resolx, ftype* resoly, ftype rho, ftype eta_b, int nbv, ftype dtVx, ftype dtVy) {
+__global__ void PT3_c(ftype* eta_nbv, ftype* weights, ftype* resolx, ftype* resoly, ftype rho, ftype eta_b, int nbv, ftype* dtVx, ftype* dtVy) {
 
     for (int ix = blockIdx.x * blockDim.x + threadIdx.x; ix<nbv; ix += blockDim.x * gridDim.x) {
         /*2. Explicit CFL time step for viscous flow, x and y directions*/
@@ -316,12 +316,12 @@ Note: The variables dtVx and dtVy are used in the velocity update,
       but they are not defined within the kernel. Should be provided 
       as constants or defined elsewhere in the code.
 */  
-__global__ void PT3_d(ftype* dVxdt, ftype* dVydt, ftype* vx, ftype* vy, ftype* spcvx, ftype* spcvy, ftype relaxation, int nbv, ftype dtVx, ftype dtVy) {
+__global__ void PT3_d(ftype* dVxdt, ftype* dVydt, ftype* vx, ftype* vy, ftype* spcvx, ftype* spcvy, ftype relaxation, int nbv, ftype* dtVx, ftype* dtVy) {
 
     for (int ix = blockIdx.x * blockDim.x + threadIdx.x; ix<nbv; ix += blockDim.x * gridDim.x) {
         /*3. velocity update, vx(new) = vx(old) + change in vx, Similarly for vy*/
-        vx[ix] = vx[ix] + relaxation*dVxdt[ix]*dtVx;
-        vy[ix] = vy[ix] + relaxation*dVydt[ix]*dtVy;
+        vx[ix] = vx[ix] + relaxation*dVxdt[ix]*dtVx[ix];
+        vy[ix] = vy[ix] + relaxation*dVydt[ix]*dtVy[ix];
 
         /*Apply Dirichlet boundary condition*/
         if (!isnan(spcvx[ix])) {
