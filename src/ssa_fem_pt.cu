@@ -218,8 +218,8 @@ __global__ void PT3(ftype* kvx, ftype* kvy, ftype* Eta_nbe,  ftype* eta_nbv,  in
         /*2. Explicit CFL time step for viscous flow, x and y directions*/
         ftype tmp_4eta = 4*eta_nbv[ix]*(1.+eta_b)*4.1;
 
-        dtVx = rho*resolx[ix]*resolx[ix]/tmp_4eta;  
-        dtVy = rho*resoly[ix]*resoly[ix]/tmp_4eta; 
+        dtVx[ix] = rho*resolx[ix]*resolx[ix]/tmp_4eta;  
+        dtVy[ix] = rho*resoly[ix]*resoly[ix]/tmp_4eta; 
 
         /*3. velocity update, vx(new) = vx(old) + change in vx, Similarly for vy*/
         vx[ix] = vx[ix] + relaxation*dVxdt[ix]*dtVx;
