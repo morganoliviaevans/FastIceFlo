@@ -219,8 +219,7 @@ Inputs: ftype* kvx
 Outputs: ftype* KVx
          ftype* KVy
          ftype* eta_nbv
-*/ 
-// Moving to the next kernel: cannot update kvx and perform indirect access, lines 474 and 475, in the same kernel
+*/
 __global__ void PT3_a(ftype* kvx, ftype* kvy, ftype* Eta_nbe, ftype* eta_nbv, int* connectivity, int* columns, ftype* KVx, ftype* KVy, int nbv) {
 	
     for (int ix = blockIdx.x * blockDim.x + threadIdx.x; ix<nbv; ix += blockDim.x * gridDim.x) {
@@ -284,7 +283,7 @@ Inputs: ftype* eta_nbv
         ftype eta_b
         int nbv
 
-Outputs: The values of dtVx and dtVy are calculated but not stored, so these results will need to be used or analyzed outside the loop. **nbv parameter
+Outputs: ftype* dtVx, ftype* dtVy
 */  
 __global__ void PT3_c(ftype* eta_nbv, ftype* weights, ftype* resolx, ftype* resoly, ftype rho, ftype eta_b, int nbv, ftype* dtVx, ftype* dtVy) {
 
@@ -311,10 +310,6 @@ Outputs: ftype* dVxdt
          ftype* dVydt
          ftype* vx
          ftype* vy
-
-Note: The variables dtVx and dtVy are used in the velocity update, 
-      but they are not defined within the kernel. Should be provided 
-      as constants or defined elsewhere in the code.
 */  
 __global__ void PT3_d(ftype* dVxdt, ftype* dVydt, ftype* vx, ftype* vy, ftype* spcvx, ftype* spcvy, ftype relaxation, int nbv, ftype* dtVx, ftype* dtVy) {
 
@@ -342,7 +337,7 @@ int main() {
     const char* inputfile  = "./JKS8e4.bin";
     const char* outputfile = "./output.outbin";
     FILE* fid = fopen(inputfile,"rb");
-    if(fid==NULL) std::cerr<<"could not open file " << inputfile << " for binary reading or writing";
+    if (fid==NULL) std::cerr << "could not open file " << inputfile << " for binary reading or writing";
 
     /*Get All we need from binary file*/
     int   nbe, nbv, M, N;
@@ -383,7 +378,7 @@ int main() {
     FetchData(fid,&friction,&M,&N,"md.friction.coefficient");
 
     /*Close input file*/
-    if(fclose(fid)!=0) std::cerr << "could not close file " << inputfile;
+    if (fclose(fid)!=0) std::cerr << "could not close file " << inputfile;
 
     /*Constants*/
     ftype n_glen     = 3.;
@@ -423,9 +418,9 @@ int main() {
 
     // add dtVx and dtVy 
     ftype* dtVx = new ftype[nbv];
-    for (int i = 0; i < nbv; i++) dtVx[ix] = 0.;
+    for (int i = 0; i < nbv; i++) dtVx[i] = 0.;
     ftype* dtVy = new ftype[nbv];
-    for (int i = 0; i < nbv; i++) dtVy[ix] = 0.;
+    for (int i = 0; i < nbv; i++) dtVy[i] = 0.;
 
     /*Manage derivatives once for all*/
     ftype* alpha   = NULL;
@@ -471,7 +466,7 @@ int main() {
         if (EII2>0.) eta_it = rheology_B[i]/(2*pow(EII2,(n_glen-1.)/(2*n_glen)));
 
         etan[i] = min(eta_it,eta_0*1e5);
-        if (isnan(etan[i])){ std::cerr<<"Found NaN in etan[i]"; return 1; }
+        if (isnan(etan[i])) { std::cerr << "Found NaN in etan[i]"; return 1; }
     }
 
     /*Linear integration points order 3*/
@@ -592,7 +587,7 @@ int main() {
                 s1=level[0]/(level[0]-level[1]);
                 s2=level[0]/(level[0]-level[2]);
             }
-            else if (level[0]*level[2]>0) {/*Nodes 0 and 2 are similar, so points must be found on segment 1-0 and 1-2*/
+            else if (level[0]*level[2]>0) { /*Nodes 0 and 2 are similar, so points must be found on segment 1-0 and 1-2*/
                 s1=level[1]/(level[1]-level[0]);
                 s2=level[1]/(level[1]-level[2]);
             }
@@ -686,7 +681,9 @@ int main() {
     ftype* gr_a_alpha2 = new ftype[nbe*3];
 
     for (int i = 0;i < nbe; i++) {
-         if (groundedratio[i] > 0.) {
+         
+        if (groundedratio[i] > 0.) {
+            
             int n3 = i * 3;
             ftype tmp_gr_a = groundedratio[i] * areas[i];
 
@@ -694,7 +691,7 @@ int main() {
                  int i_index = index[n3 + j] - 1;
                  gr_a_alpha2[n3 + j] =  tmp_gr_a * alpha2[i_index];
             }
-         }
+        }
     }
 
     /*------------Copy all relevant vectors from host (CPU) to device (GPU) ---------------*/
@@ -872,7 +869,7 @@ int main() {
       
         if (iter==11) cudaEventRecord(start);
 
-            PT1<<<gride, blocke, 0, stream1>>>(d_vx, d_vy, d_alpha, d_beta, d_index, kvx,  kvy, d_etan, d_Helem, d_areas, d_isice, Eta_nbe, d_rheology_B, n_glen, eta_0, rele, nbe);
+            PT1<<<gride, blocke, 0, stream1>>>(d_vx, d_vy, d_alpha, d_beta, d_index, kvx, kvy, d_etan, d_Helem, d_areas, d_isice, Eta_nbe, d_rheology_B, n_glen, eta_0, rele, nbe);
             cudaStreamSynchronize(stream1);
 
             PT2_x<<<gride, blocke, 0, stream1>>>(kvx, d_groundedratio, d_areas, d_index, d_alpha2, d_vx, d_gr_a_alpha2, d_isice, nbe);
@@ -880,15 +877,15 @@ int main() {
             cudaStreamSynchronize(stream1);
             cudaStreamSynchronize(stream2);
 
-            PT3_a<<<gridv, blockv, 0, stream1>>>(kvx, kvy, Eta_nbe, eta_nbv, connectivity, columns, KVx, KVy, nbv);
+            PT3_a<<<gridv, blockv, 0, stream1>>>(kvx, kvy, Eta_nbe, eta_nbv, d_connectivity, d_columns, KVx, KVy, nbv);
             cudaStreamSynchronize(stream1);
 
-            PT3_b<<<gridv, blockv, 0, stream1>>>(KVx, KVy, Fvx, Fvy, dVxdt, dVydt, rho_ML, damp, nbv);
-            PT3_c<<<gridv, blockv, 0, stream2>>>(eta_nbv, weights, resolx, resoly, rho, eta_b, dtVx, dtVy, nbv);
+            PT3_b<<<gridv, blockv, 0, stream1>>>(KVx, KVy, d_Fvx, d_Fvy, d_dVxdt, d_dVydt, d_rho_ML, damp, nbv);
+            PT3_c<<<gridv, blockv, 0, stream2>>>(eta_nbv, d_weights, d_resolx, d_resoly, rho, eta_b, nbv, d_dtVx, d_dtVy);
             cudaStreamSynchronize(stream1);
             cudaStreamSynchronize(stream2);
 
-            PT3_d<<<gridv, blockv, 0, stream1>>>(dVxdt, dVydt, vx, vy, spcvx, spcvy, relaxation, dtVx, dtVy, nbv); 
+            PT3_d<<<gridv, blockv, 0, stream1>>>(d_dVxdt, d_dVydt, d_vx, d_vy, d_spcvx, d_spcvy, relaxation, nbv, d_dtVx, d_dtVy); 
             cudaStreamSynchronize(stream1);
 
         if ((iter % nout_iter) == 0) {
@@ -900,7 +897,7 @@ int main() {
             if (isnan(device_MAXx) || isnan(device_MAXy)) { break; }
             else {
                 iterror = max(device_MAXx, device_MAXy);
-                std::cout<<"iter="<<iter<<", err="<<iterror<<std::endl;
+                std::cout << "iter=" << iter << ", err=" << iterror << std::endl;
                 if ((iterror < epsi) && (iter > 100)) break;
             } 
         }  
@@ -913,7 +910,7 @@ int main() {
     seconds = seconds/1000.0;
 
     time_s = seconds; ftype gbs = mem/time_s;
-    std::cout<<"\n Perf: "<<time_s<<" sec. (@ "<<gbs*(iter-10)*nIO<<" GB/s)"<<std::endl;
+    std::cout << "\n Perf: " << time_s << " sec. (@ " << gbs*(iter-10)*nIO << " GB/s)" << std::endl;
 
     /*Copy results from Device to host*/
     cudaMemcpy(vx, d_vx, nbv*sizeof(ftype), cudaMemcpyDeviceToHost );
@@ -921,11 +918,11 @@ int main() {
  
     /*Write output*/
     fid = fopen(outputfile,"wb");
-    if (fid==NULL) std::cerr<<"could not open file " << outputfile << " for binary reading or writing";
+    if (fid==NULL) std::cerr << "could not open file " << outputfile << " for binary reading or writing";
     WriteData(fid, "PTsolution", "SolutionType");
     WriteData(fid, vx, nbv, 1, "Vx");
     WriteData(fid, vy, nbv, 1, "Vy");
-    if (fclose(fid)!=0) std::cerr<<"could not close file " << outputfile;
+    if (fclose(fid)!=0) std::cerr << "could not close file " << outputfile;
 
     /*Cleanup and return*/
     delete [] index;
