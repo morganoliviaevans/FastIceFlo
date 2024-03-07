@@ -2,6 +2,7 @@
 #include <iostream>
 #include <string.h>
 #include <cmath>
+#include <nvtx3/nvToolsExt.h>
 using namespace std;
 
 /*define GPU specific variables*/
@@ -47,7 +48,7 @@ Outputs: ftype* kvx
          ftype* Eta_nbe
 */ 
 __global__ void PT1(ftype* vx, ftype* vy, ftype* alpha, ftype* beta, int* index,  ftype* kvx, ftype* kvy, ftype* etan,  ftype* Helem, ftype* areas, bool* isice, ftype* Eta_nbe, ftype* rheology_B, ftype n_glen, ftype eta_0, ftype rele,int nbe){ 
-    
+
     for (int ix = blockIdx.x * blockDim.x + threadIdx.x; ix<nbe; ix += blockDim.x * gridDim.x) { 
        
         if (isice[ix]) {
@@ -221,7 +222,7 @@ Outputs: ftype* KVx
          ftype* eta_nbv
 */
 __global__ void PT3_a(ftype* kvx, ftype* kvy, ftype* Eta_nbe, ftype* eta_nbv, int* connectivity, int* columns, ftype* KVx, ftype* KVy, int nbv) {
-	
+
     for (int ix = blockIdx.x * blockDim.x + threadIdx.x; ix<nbv; ix += blockDim.x * gridDim.x) {
 
         KVx[ix] = 0.;
@@ -869,24 +870,94 @@ int main() {
       
         if (iter==11) cudaEventRecord(start);
 
+    	    // Define NVTX event attributes: PT1, pink
+            nvtxEventAttributes_t eventAttrib_PT1 = {0};
+            eventAttrib_PT1.version = NVTX_VERSION;
+            eventAttrib_PT1.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
+            eventAttrib_PT1.colorType = NVTX_COLOR_ARGB;
+            eventAttrib_PT1.color = 0xFFFFC0CB;
+            eventAttrib_PT1.messageType = NVTX_MESSAGE_TYPE_ASCII;
+            eventAttrib_PT1.message.ascii = "PT1";
+
+            // Push NVTX range with color specifier and name signifier
+            nvtxRangePushEx(&eventAttrib_PT1);
+
             PT1<<<gride, blocke, 0, stream1>>>(d_vx, d_vy, d_alpha, d_beta, d_index, kvx, kvy, d_etan, d_Helem, d_areas, d_isice, Eta_nbe, d_rheology_B, n_glen, eta_0, rele, nbe);
             cudaStreamSynchronize(stream1);
+            
+            nvtxRangePop();
 
-            PT2_x<<<gride, blocke, 0, stream1>>>(kvx, d_groundedratio, d_areas, d_index, d_alpha2, d_vx, d_gr_a_alpha2, d_isice, nbe);
+            // Define NVTX event attributes: PT2_xy, blue
+            nvtxEventAttributes_t eventAttrib_PT2_xy = {0};
+            eventAttrib_PT2_xy.version = NVTX_VERSION;
+            eventAttrib_PT2_xy.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
+            eventAttrib_PT2_xy.colorType = NVTX_COLOR_ARGB;
+            eventAttrib_PT2_xy.color = 0xFF0000FF;
+            eventAttrib_PT2_xy.messageType = NVTX_MESSAGE_TYPE_ASCII;
+            eventAttrib_PT2_xy.message.ascii = "PT2_xy";
+            
+            // Push NVTX range with color specifier and name signifier
+            nvtxRangePushEx(&eventAttrib_PT2_xy);
+
+            PT2_x<<<gride, blocke, 0, stream1>>>(kvx, d_groundedratio, d_areas, d_index, d_alpha2, d_vx, d_gr_a_alpha2, d_isice, nbe);   
             PT2_y<<<gride, blocke, 0, stream2>>>(kvy, d_groundedratio, d_areas, d_index, d_alpha2, d_vy, d_gr_a_alpha2, d_isice, nbe);
             cudaStreamSynchronize(stream1);
             cudaStreamSynchronize(stream2);
+            
+            nvtxRangePop();
+
+            // Define NVTX event attributes: PT3_a, purple
+            nvtxEventAttributes_t eventAttrib_PT3_a = {0};
+            eventAttrib_PT3_a.version = NVTX_VERSION;
+            eventAttrib_PT3_a.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
+            eventAttrib_PT3_a.colorType = NVTX_COLOR_ARGB;
+            eventAttrib_PT3_a.color = 0xFF800080;
+            eventAttrib_PT3_a.messageType = NVTX_MESSAGE_TYPE_ASCII;
+            eventAttrib_PT3_a.message.ascii = "PT3_a";
+            
+            // Push NVTX range with color specifier and name signifier
+            nvtxRangePushEx(&eventAttrib_PT3_a);
 
             PT3_a<<<gridv, blockv, 0, stream1>>>(kvx, kvy, Eta_nbe, eta_nbv, d_connectivity, d_columns, KVx, KVy, nbv);
             cudaStreamSynchronize(stream1);
+            
+            nvtxRangePop();
+
+            // Define NVTX event attributes: PT3_bc, cyan
+            nvtxEventAttributes_t eventAttrib_PT3_bc = {0};
+            eventAttrib_PT3_bc.version = NVTX_VERSION;
+            eventAttrib_PT3_bc.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
+            eventAttrib_PT3_bc.colorType = NVTX_COLOR_ARGB;
+            eventAttrib_PT3_bc.color = 0xFF00FFFF;
+            eventAttrib_PT3_bc.messageType = NVTX_MESSAGE_TYPE_ASCII;
+            eventAttrib_PT3_bc.message.ascii = "PT3_bc";
+            
+            // Push NVTX range with color specifier and name signifier
+            nvtxRangePushEx(&eventAttrib_PT3_bc);
 
             PT3_b<<<gridv, blockv, 0, stream1>>>(KVx, KVy, d_Fvx, d_Fvy, d_dVxdt, d_dVydt, d_rho_ML, damp, nbv);
             PT3_c<<<gridv, blockv, 0, stream2>>>(eta_nbv, d_weights, d_resolx, d_resoly, rho, eta_b, nbv, d_dtVx, d_dtVy);
             cudaStreamSynchronize(stream1);
             cudaStreamSynchronize(stream2);
+            
+            nvtxRangePop();
+            
+            // Define NVTX event attributes: PT3_d, orange
+            nvtxEventAttributes_t eventAttrib_PT3_d = {0};
+            eventAttrib_PT3_d.version = NVTX_VERSION;
+            eventAttrib_PT3_d.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
+            eventAttrib_PT3_d.colorType = NVTX_COLOR_ARGB;
+            eventAttrib_PT3_d.color = 0xFFFFA500;
+            eventAttrib_PT3_d.messageType = NVTX_MESSAGE_TYPE_ASCII;
+            eventAttrib_PT3_d.message.ascii = "PT3_d";
+
+            // Push NVTX range with color specifier and name signifier
+            nvtxRangePushEx(&eventAttrib_PT3_d);
 
             PT3_d<<<gridv, blockv, 0, stream1>>>(d_dVxdt, d_dVydt, d_vx, d_vy, d_spcvx, d_spcvy, relaxation, nbv, d_dtVx, d_dtVy); 
             cudaStreamSynchronize(stream1);
+            
+            nvtxRangePop();
 
         if ((iter % nout_iter) == 0) {
 
