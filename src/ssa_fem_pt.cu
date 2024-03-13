@@ -21,10 +21,34 @@ using namespace std;
 #define div10 0.1
 #define div30 0.0333333333
 #define div60 0.0166666667
-  
-// CUDA IMPLEMENTATION (to delete after OpenAcc is finished)
+
+/*CUDA Code*/
+/* 
+Inputs: ftype* vx
+        ftype* vy 
+        ftype* alpha 
+        ftype* beta
+        int* index
+        ftype* kvx
+        ftype* kvy
+        ftype* etan
+        ftype* Helem
+        ftype* areas
+        bool* isice
+        ftype* Eta_nbe
+        ftype* rheology_B
+        ftype n_glen
+        ftype eta_0
+        ftype rele
+        int nbe
+
+Outputs: ftype* kvx
+         ftype* kvy
+         ftype* etan
+         ftype* Eta_nbe
+*/ 
 __global__ void PT1(ftype* vx, ftype* vy, ftype* alpha, ftype* beta, int* index,  ftype* kvx, ftype* kvy, ftype* etan,  ftype* Helem, ftype* areas, bool* isice, ftype* Eta_nbe, ftype* rheology_B, ftype n_glen, ftype eta_0, ftype rele,int nbe){ 
-    
+
     for (int ix = blockIdx.x * blockDim.x + threadIdx.x; ix<nbe; ix += blockDim.x * gridDim.x) { 
        
         if (isice[ix]) {
@@ -65,82 +89,6 @@ __global__ void PT1(ftype* vx, ftype* vy, ftype* alpha, ftype* beta, int* index,
             }
         }
         Eta_nbe[ix] = etan[ix]*areas[ix];
-    }
-}
-
-/* Inputs: ftype* vx
-        ftype* vy 
-        ftype* alpha 
-        ftype* beta
-        int* index
-        ftype* kvx
-        ftype* kvy
-        ftype* etan
-        ftype* Helem
-        ftype* areas
-        bool* isice
-        ftype* Eta_nbe
-        ftype* rheology_B
-        ftype n_glen
-        ftype eta_0
-        ftype rele
-        int nbe
-
-Outputs: ftype* kvx
-         ftype* kvy
-         ftype* etan
-         ftype* Eta_nbe
-*/ 
-
-// OPENACC IMPLEMENTATION
-
-void PT1(ftype* vx, ftype* vy, ftype* alpha, ftype* beta, int* index,  ftype* kvx, ftype* kvy, ftype* etan,  ftype* Helem, ftype* areas, bool* isice, ftype* Eta_nbe, ftype* rheology_B, ftype n_glen, ftype eta_0, ftype rele,int nbe){ 
-    
-    // openacc data construct copyin() specifies the specific data movement for this kernel (might or might not need nbe)
-    #pragma acc data copyin(isice[nbe], rheology_B[nbe], etan[nbe], Helem[nbe], areas[nbe], kvx[nbe], kvy[nbe], Eta_nbe[nbe])
-    {
-        #pragma acc parallel loop 
-        for (int ix = 0; ix < nbe; ix += 1) { 
-            
-            if (isice[ix]) {
-
-                ftype Localalpha[3];
-                ftype Localbeta[3];
-                ftype Localvx[3];
-                ftype Localvy[3];
-            
-                for (int i = 0; i < 3; i++) {
-                Localalpha[i] = alpha[ix*3+i];
-                Localbeta[i]  = beta[ix*3+i];
-                Localvx[i]    = vx[index[ix*3+i]-1];
-                Localvy[i]    = vy[index[ix*3+i]-1];
-                }
-            
-                ftype dvxdx = Localvx[0]*Localalpha[0] + Localvx[1]*Localalpha[1] + Localvx[2]*Localalpha[2];
-                ftype dvxdy = Localvx[0]* Localbeta[0] + Localvx[1]* Localbeta[1] + Localvx[2]* Localbeta[2];
-                ftype dvydx = Localvy[0]*Localalpha[0] + Localvy[1]*Localalpha[1] + Localvy[2]*Localalpha[2];
-                ftype dvydy = Localvy[0]* Localbeta[0] + Localvy[1]* Localbeta[1] + Localvy[2]* Localbeta[2];
-
-                ftype  eps_xx = dvxdx;
-                ftype  eps_yy = dvydy;
-                ftype  eps_xy = .5*(dvxdy+dvydx);
-                ftype  EII2   = eps_xx*eps_xx + eps_yy*eps_yy + eps_xy*eps_xy + eps_xx*eps_yy;
-                ftype  eta_it = 5e+13;
-
-            if (EII2>0.) eta_it = rheology_B[ix]/(2*__powf(EII2,(n_glen-1.)/(2*n_glen)));
-            
-                etan[ix] = min(__expf(rele*__logf(eta_it) + (1.0-rele)*__logf(etan[ix])),eta_0*1e5);
-
-                //Viscous Deformation//
-                ftype tmp_2hele_etan_areas = 2 * Helem[ix] * etan[ix] * areas[ix];
-
-                for (int i = 0; i < 3; i++) {
-                    kvx[ix*3+i] = tmp_2hele_etan_areas * ((2 * eps_xx + eps_yy) * Localalpha[i]   +  eps_xy *  Localbeta[i] );
-                    kvy[ix*3+i] = tmp_2hele_etan_areas * ((2 * eps_yy + eps_xx) * Localbeta[i]    +  eps_xy * Localalpha[i] );            
-                }
-            }
-            Eta_nbe[ix] = etan[ix] * areas[ix];
-        }
     }
 }
 
@@ -274,7 +222,7 @@ Outputs: ftype* KVx
          ftype* eta_nbv
 */
 __global__ void PT3_a(ftype* kvx, ftype* kvy, ftype* Eta_nbe, ftype* eta_nbv, int* connectivity, int* columns, ftype* KVx, ftype* KVy, int nbv) {
-	
+
     for (int ix = blockIdx.x * blockDim.x + threadIdx.x; ix<nbv; ix += blockDim.x * gridDim.x) {
 
         KVx[ix] = 0.;
@@ -747,28 +695,26 @@ int main() {
         }
     }
 
-    // CUDA IMPLEMENTATION (to delete after OpenAcc is finished)
-
     /*------------Copy all relevant vectors from host (CPU) to device (GPU) ---------------*/
     int *d_index = NULL;
     cudaMalloc(&d_index, nbe*3*sizeof(int));
-    cudaMemcpy(d_index, index, nbe*3*sizeof(int), cudaMemcpyHostToDevice); 
+    cudaMemcpy(d_index, index, nbe*3*sizeof(int), cudaMemcpyHostToDevice);
 
     ftype *d_rho_ML;
     cudaMalloc(&d_rho_ML, nbv*sizeof(ftype));
-    cudaMemcpy(d_rho_ML, rho_ML, nbv*sizeof(ftype), cudaMemcpyHostToDevice); 
+    cudaMemcpy(d_rho_ML, rho_ML, nbv*sizeof(ftype), cudaMemcpyHostToDevice);
 
     ftype *d_gr_a_alpha2;
     cudaMalloc(&d_gr_a_alpha2, 3*nbe*sizeof(ftype));
-    cudaMemcpy(d_gr_a_alpha2, gr_a_alpha2, 3*nbe*sizeof(ftype), cudaMemcpyHostToDevice); 
+    cudaMemcpy(d_gr_a_alpha2, gr_a_alpha2, 3*nbe*sizeof(ftype), cudaMemcpyHostToDevice);
 
     ftype *d_vx;
     cudaMalloc(&d_vx, nbv*sizeof(ftype));
-    cudaMemcpy(d_vx, vx, nbv*sizeof(ftype), cudaMemcpyHostToDevice); 
+    cudaMemcpy(d_vx, vx, nbv*sizeof(ftype), cudaMemcpyHostToDevice);  
 
     ftype *d_vy;
     cudaMalloc(&d_vy, nbv*sizeof(ftype));
-    cudaMemcpy(d_vy, vy, nbv*sizeof(ftype), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_vy, vy, nbv*sizeof(ftype), cudaMemcpyHostToDevice);  
     
     ftype *d_alpha;
     cudaMalloc(&d_alpha, nbe*3*sizeof(ftype));
@@ -780,7 +726,7 @@ int main() {
 
     ftype *d_etan;
     cudaMalloc(&d_etan, nbe*sizeof(ftype));
-    cudaMemcpy(d_etan, etan, nbe*sizeof(ftype), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_etan, etan, nbe*sizeof(ftype), cudaMemcpyHostToDevice);  
 
     ftype *d_rheology_B;
     cudaMalloc(&d_rheology_B, nbe*sizeof(ftype));
@@ -900,8 +846,6 @@ int main() {
 
     ftype *kvy = NULL;
     cudaMalloc(&kvy, nbe*3*sizeof(ftype));
-
-    // CUDA IMPLEMENTATION (to delete after OpenAcc is finished)
     
     /*Creating CUDA streams*/
     cudaStream_t stream1, stream2;
@@ -921,9 +865,6 @@ int main() {
     std::cout << "Starting PT loop, nbe = " << nbe << ", nbv = " << nbv << std::endl; 
     int iter;
     ftype iterror;
-
-    // openacc enter data construct copyin() copies in all relevant vectors from host (CPU) to device (GPU) and create() allocates relevant vectors on device (GPU)
-    #pragma acc data enter copyin(index, rho_ML, gr_a_alpha2, vx, vy, alpha, beta, etan, rheology_B, Helem, areas, weights, ML, Fvx, Fvy, dVxdt, dVydt, dtVx, dtVy, resolx, resoly, H, spcvx, spcvy, alpha2, groundedratio, isice, connectivity, columns, device_maxvalx, device_maxvaly) create(dvxdx, dvxdy, dvydx, dvydy, KVx, KVy, eta_nbv, Eta_nbe, kvx, kvy)
 
     for (iter = 1; iter <= niter; iter++) {
       
@@ -1032,8 +973,6 @@ int main() {
             } 
         }  
     }
-    // openacc exit data construct copies out all relevant vectors
-    #pragma acc data exit copyout(vx, vy)
 
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
@@ -1044,11 +983,9 @@ int main() {
     time_s = seconds; ftype gbs = mem/time_s;
     std::cout << "\n Perf: " << time_s << " sec. (@ " << gbs*(iter-10)*nIO << " GB/s)" << std::endl;
 
-    // CUDA IMPLEMENTATION (to delete after OpenAcc is finished)
-    
     /*Copy results from Device to host*/
-    cudaMemcpy(vx, d_vx, nbv*sizeof(ftype), cudaMemcpyDeviceToHost );  // OPENACC COPYOUT
-    cudaMemcpy(vy, d_vy, nbv*sizeof(ftype), cudaMemcpyDeviceToHost );  // OPENACC COPYOUT
+    cudaMemcpy(vx, d_vx, nbv*sizeof(ftype), cudaMemcpyDeviceToHost );
+    cudaMemcpy(vy, d_vy, nbv*sizeof(ftype), cudaMemcpyDeviceToHost );
  
     /*Write output*/
     fid = fopen(outputfile,"wb");
