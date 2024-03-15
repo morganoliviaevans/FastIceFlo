@@ -7,7 +7,6 @@ using namespace std;
 
 /* Define GPU specific variables */
 #define GPU_ID   0
-
 #define BLOCK_Xe 128 
 #define BLOCK_Xv 128
 
@@ -82,9 +81,9 @@ void PT1(ftype* vx, ftype* vy, ftype* alpha, ftype* beta, int* index,  ftype* kv
                 ftype  EII2   = eps_xx*eps_xx + eps_yy*eps_yy + eps_xy*eps_xy + eps_xx*eps_yy;
                 ftype  eta_it = 5e+13;
 
-            if (EII2>0.) eta_it = rheology_B[ix]/(2*__powf(EII2,(n_glen-1.)/(2*n_glen)));
+            if (EII2>0.) eta_it = rheology_B[ix]/(2*__powf(EII2,(n_glen-1.)/(2*n_glen)));             //------------------------------ ** FIX ME **
             
-                etan[ix] = min(__expf(rele*__logf(eta_it) + (1.0-rele)*__logf(etan[ix])),eta_0*1e5);
+                etan[ix] = min(__expf(rele*__logf(eta_it) + (1.0-rele)*__logf(etan[ix])),eta_0*1e5);  //------------------------------ ** FIX ME **
 
                 /* Viscous Deformation */
                 ftype tmp_2hele_etan_areas = 2 * Helem[ix] * etan[ix] * areas[ix];
@@ -438,14 +437,14 @@ int main() {
 
     /* Constants */
     ftype n_glen     = 3.;
-    ftype damp       = dmp;  
-    ftype rele       = rela;  
+    ftype damp       = 0.98;  
+    ftype rele       = 0.03;  
     ftype eta_b      = 0.5;
     ftype eta_0      = 1.e+14/2.;
     int   niter      = 5e6; 
     int   nout_iter  = 100; 
     ftype epsi       = 3.171e-7;
-    ftype relaxation = stability; 
+    ftype relaxation = 0.99; 
         
     /* Ceiling division to get the close to optimal GRID size */
     unsigned int GRID_Xe = 1 + ((nbe - 1) / BLOCK_Xe);
@@ -658,7 +657,7 @@ int main() {
                 s2 = level[2]/(level[2]-level[0]);
             }
             /* Nodes 1 and 2 are similar, so points must be found on segment 0-1 and 0-2 */
-            else if (level[1] * evel[2] > 0) {
+            else if (level[1] * level[2] > 0) {
                 s1 = level[0]/(level[0]-level[1]);
                 s2 = level[0]/(level[0]-level[2]);
             }
@@ -667,7 +666,7 @@ int main() {
                 s1 = level[1]/(level[1]-level[0]);
                 s2 = level[1]/(level[1]-level[2]);
             }
-            else { std::cerr << "should not be here..."; }
+            else { std::cerr << "Should not be here..."; }
 
             if (level[0] * level[1] * level[2] > 0.) {
                 /* Two nodes floating, inner triangle is grounded */
@@ -784,7 +783,7 @@ int main() {
 
     for (iter = 1; iter <= niter; iter++) {
       
-        /* Calling kernels here as normal function calls with NVTX */
+        /* Calling kernels here as normal function calls with NVTX annotations */
         if (iter == 11)
 
             nvtxEventAttributes_t eventAttrib_PT1 = {0};
@@ -863,7 +862,7 @@ int main() {
         /* This if statement is just printing iteration and error values, specifically GPU functions **FIX** */
         /* if ((iter % nout_iter) == 0) {
 
-            // /* Get final error estimate 
+            // Get final error estimate 
             __device_max_x(dVxdt); 
             __device_max_y(dVydt);
 
@@ -892,11 +891,11 @@ int main() {
 
     /* Write output */
     fid = fopen(outputfile,"wb");
-    if (fid==NULL) std::cerr << "could not open file " << outputfile << " for binary reading or writing";
+    if (fid==NULL) std::cerr << "Could not open file " << outputfile << " for binary reading or writing";
     WriteData(fid, "PTsolution", "SolutionType");
     WriteData(fid, vx, nbv, 1, "Vx");
     WriteData(fid, vy, nbv, 1, "Vy");
-    if (fclose(fid)!=0) std::cerr << "could not close file " << outputfile;
+    if (fclose(fid)!=0) std::cerr << "Could not close file " << outputfile;
 
     /* Cleanup and return */
     delete [] index;
