@@ -364,42 +364,42 @@ void MeshSize(ftype* resolx,ftype* resoly,int* index,ftype* x,ftype* y,ftype* ar
 ////////////// GPU code
 ////////////////////////
 
-void clean_cuda(){ 
-    cudaError_t ce = cudaGetLastError();
-    if(ce != cudaSuccess){ printf("ERROR launching GPU C-CUDA program: %s\n", cudaGetErrorString(ce)); cudaDeviceReset(); }
-}
+// void clean_cuda(){ 
+//     cudaError_t ce = cudaGetLastError();
+//     if(ce != cudaSuccess){ printf("ERROR launching GPU C-CUDA program: %s\n", cudaGetErrorString(ce)); cudaDeviceReset(); }
+// }
 
 // Find the max of an array
-__shared__ volatile ftype block_maxval;
-__global__ void __device_max_d(ftype* A, int nbv, ftype* device_maxval){
+// __shared__ volatile ftype block_maxval;
+// __global__ void __device_max_d(ftype* A, int nbv, ftype* device_maxval){
    
-    ftype thread_maxval=0.0;
+//     ftype thread_maxval=0.0;
    
-    int ix  = blockIdx.x*blockDim.x + threadIdx.x; // thread ID, dimension x
-    if (ix<nbv){ thread_maxval = abs(A[ix]); }
-    if (threadIdx.x==0){ block_maxval=0.0; }
-    __syncthreads();
-    for (int i=0; i < (BLOCK_Xv); i++){
-           if (i==threadIdx.x) if(isnan(thread_maxval)) {{block_maxval = thread_maxval;} break;} 
-           else { block_maxval = max(block_maxval, thread_maxval);}  
-        __syncthreads();
-    }
-    device_maxval[blockIdx.x] = block_maxval;
-}
+//     int ix  = blockIdx.x*blockDim.x + threadIdx.x; // thread ID, dimension x
+//     if (ix<nbv){ thread_maxval = abs(A[ix]); }
+//     if (threadIdx.x==0){ block_maxval=0.0; }
+//     __syncthreads();
+//     for (int i=0; i < (BLOCK_Xv); i++){
+//            if (i==threadIdx.x) if(isnan(thread_maxval)) {{block_maxval = thread_maxval;} break;} 
+//            else { block_maxval = max(block_maxval, thread_maxval);}  
+//         __syncthreads();
+//     }
+//     device_maxval[blockIdx.x] = block_maxval;
+// }
 
-#define __device_max_x(dVxdt)   __device_max_d<<<gridv, blockv>>>(d_dVxdt, nbv, d_device_maxvalx); \
-                                cudaMemcpy(device_maxvalx, d_device_maxvalx, GRID_Xv*sizeof(ftype), cudaMemcpyDeviceToHost); \
-                                ftype device_MAXx = 0.0;                                     \
-                                for (int i=0; i < (GRID_Xv); i++){                            \
-                                     if(isnan(device_maxvalx[i])) {device_MAXx = device_maxvalx[i];std::cerr<<"\n Found NaN in dVxdt[i]"; break;} \
-                                     device_MAXx = max(device_MAXx, device_maxvalx[i]);        \
-                                }
+// #define __device_max_x(dVxdt)   __device_max_d<<<gridv, blockv>>>(d_dVxdt, nbv, d_device_maxvalx); \
+//                                 cudaMemcpy(device_maxvalx, d_device_maxvalx, GRID_Xv*sizeof(ftype), cudaMemcpyDeviceToHost); \
+//                                 ftype device_MAXx = 0.0;                                     \
+//                                 for (int i=0; i < (GRID_Xv); i++){                            \
+//                                      if(isnan(device_maxvalx[i])) {device_MAXx = device_maxvalx[i];std::cerr<<"\n Found NaN in dVxdt[i]"; break;} \
+//                                      device_MAXx = max(device_MAXx, device_maxvalx[i]);        \
+//                                 }
 
-#define __device_max_y(dVydt)   __device_max_d<<<gridv, blockv>>>(d_dVydt, nbv, d_device_maxvaly); \
-                                cudaMemcpy(device_maxvaly, d_device_maxvaly, GRID_Xv*sizeof(ftype), cudaMemcpyDeviceToHost); \
-                                ftype device_MAXy = 0.0;                                     \
-                                for (int i=0; i < (GRID_Xv); i++){                            \
-                                         if(isnan(device_maxvaly[i])) {device_MAXy = device_maxvaly[i]; std::cerr<<"\n Found NaN in dVydt[i]"; break;} \
-                                         device_MAXy = max(device_MAXy, device_maxvaly[i]);        \
-                                }
+// #define __device_max_y(dVydt)   __device_max_d<<<gridv, blockv>>>(d_dVydt, nbv, d_device_maxvaly); \
+//                                 cudaMemcpy(device_maxvaly, d_device_maxvaly, GRID_Xv*sizeof(ftype), cudaMemcpyDeviceToHost); \
+//                                 ftype device_MAXy = 0.0;                                     \
+//                                 for (int i=0; i < (GRID_Xv); i++){                            \
+//                                          if(isnan(device_maxvaly[i])) {device_MAXy = device_maxvaly[i]; std::cerr<<"\n Found NaN in dVydt[i]"; break;} \
+//                                          device_MAXy = max(device_MAXy, device_maxvaly[i]);        \
+//                                 }
 
