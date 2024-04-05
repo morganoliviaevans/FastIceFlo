@@ -21,7 +21,7 @@ using namespace std;
 #define div30 0.0333333333
 #define div60 0.0166666667
 
-/* Define global variables */
+/* Define global variables to allow wide scope */
 int nbv, nbe;
   
 /*------- PT1 Inputs and Outputs -------*/
@@ -119,7 +119,7 @@ Outputs: ftype* kvx
 void PT2_x(ftype* kvx, ftype* groundedratio, ftype* areas, int* index, ftype* alpha2, ftype* vx, ftype* gr_a_alpha2, bool* isice, int nbe) {
 
     // The OpenACC copyin() clause is used to specify data that needs to be copied from the CPU to the GPU before kernel execution
-    #pragma acc enter data copyin(isice[nbe], kvx[nbe*3], groundedratio[nbe], gr_a_alpha2[nbe*3], vx[nbv], index[nbe*3])
+    #pragma acc enter data copyin(isice[nbe], kvx[nbe*3], groundedratio[nbe], gr_a_alpha2[3*nbe], vx[nbv], index[nbe*3])
     {
         /* The OpenACC #pragma acc parallel loop directive instructs the compiler to parallelize the loop immediately following it */
         #pragma acc parallel loop async(1)
@@ -185,7 +185,7 @@ Outputs: ftype* kvy
 void PT2_y(ftype* kvy, ftype* groundedratio, ftype* areas, int* index, ftype* alpha2, ftype* vy, ftype* gr_a_alpha2, bool* isice, int nbe) {
 
     // The OpenACC copyin() clause is used to specify data that needs to be copied from the CPU to the GPU before kernel execution
-    #pragma acc enter data copyin(isice[nbe], kvy[nbe*3], groundedratio[nbe], gr_a_alpha2[nbe*3], vy[nbv], index[nbe*3])
+    #pragma acc enter data copyin(isice[nbe], kvy[nbe*3], groundedratio[nbe], gr_a_alpha2[3*nbe], vy[nbv], index[nbe*3])
     {
         /* The OpenACC #pragma acc parallel loop directive instructs the compiler to parallelize the loop immediately following it */
         #pragma acc parallel loop async(2)
@@ -782,7 +782,7 @@ int main() {
     // ftype iterror;
 
     // OpenACC enter data construct copyin() copies in all relevant vectors from host (CPU) to device (GPU) and create() allocates relevant vectors on device (GPU)
-    #pragma acc enter data copyin(index[nbe*3], rho_ML[nbv], gr_a_alpha2[nbe*3], vx[nbv], vy[nbv], alpha[nbe*3], beta[nbe*3], etan[nbe], rheology_B[nbe], Helem[nbe], areas[nbe], weights[nbv], ML[nbv], Fvx[nbv], Fvy[nbv], dVxdt[nbv], dVydt[nbv], dtVx[nbv], dtVy[nbv], resolx[nbv], resoly[nbv], H[nbv], spcvx[nbv], spcvy[nbv], alpha2[nbe], groundedratio[nbe], isice[nbe], connectivity[nbv*8], columns[nbv*8], device_maxvalx[GRID_Xv], device_maxvaly[GRID_Xv]) create(dvxdx[nbe], dvxdy[nbe], dvydx[nbe], dvydy[nbe], KVx[nbv], KVy[nbv], eta_nbv[nbv], Eta_nbe[nbe*3], kvx[nbe*3], kvy[nbe*3])
+    #pragma acc enter data copyin(index[nbe*3], rho_ML[nbv], gr_a_alpha2[3*nbe], vx[nbv], vy[nbv], alpha[nbe*3], beta[nbe*3], etan[nbe], rheology_B[nbe], Helem[nbe], areas[nbe], weights[nbv], ML[nbv], Fvx[nbv], Fvy[nbv], dVxdt[nbv], dVydt[nbv], dtVx[nbv], dtVy[nbv], resolx[nbv], resoly[nbv], H[nbv], spcvx[nbv], spcvy[nbv], alpha2[nbv], groundedratio[nbe], isice[nbe], connectivity[nbv*8], columns[nbv*8], device_maxvalx[GRID_Xv], device_maxvaly[GRID_Xv]) create(dvxdx[nbe], dvxdy[nbe], dvydx[nbe], dvydy[nbe], KVx[nbv], KVy[nbv], eta_nbv[nbv], Eta_nbe[nbe*3], kvx[nbe*3], kvy[nbe*3])
 
     for (iter = 1; iter <= niter; iter++) {
       
