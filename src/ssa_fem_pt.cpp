@@ -2,8 +2,10 @@
 #include <iostream>
 #include <string.h>
 #include <cmath>
+#include <chrono>
 #include <nvtx3/nvToolsExt.h>
 using namespace std;
+using namespace std::chrono;
 
 /* Define GPU specific variables */
 #define GPU_ID   0
@@ -50,13 +52,13 @@ Outputs: ftype* kvx
          ftype* Eta_nbe
 */
 
-void PT1(ftype* vx, ftype* vy, ftype* alpha, ftype* beta, int* index,  ftype* kvx, ftype* kvy, ftype* etan,  ftype* Helem, ftype* areas, bool* isice, ftype* Eta_nbe, ftype* rheology_B, ftype n_glen, ftype eta_0, ftype rele,int nbe){ 
+void PT1(ftype* vx, ftype* vy, ftype* alpha, ftype* beta, int* index,  ftype* kvx, ftype* kvy, ftype* etan,  ftype* Helem, ftype* areas, bool* isice, ftype* Eta_nbe, ftype* rheology_B, ftype n_glen, ftype eta_0, ftype rele,int nbe) { 
     
     // The OpenACC copyin() clause is used to specify data that needs to be copied from the CPU to the GPU before kernel execution
-    #pragma acc enter data copyin(vx[nbv], vy[nbv], isice[nbe], rheology_B[nbe], etan[nbe], Helem[nbe], areas[nbe], kvx[nbe*3], kvy[nbe*3], Eta_nbe[nbe*3])
+    #pragma acc enter data copyin(vx[:nbv], vy[:nbv], isice[:nbe], rheology_B[:nbe], etan[:nbe], Helem[:nbe], areas[:nbe], kvx[:nbe*3], kvy[:nbe*3], Eta_nbe[:nbe*3])
     {
         /* The OpenACC #pragma acc parallel loop directive instructs the compiler to parallelize the loop immediately following it, async(1) = cudaStreamCreate(&stream1); */
-        #pragma acc parallel loop async(1)
+        #pragma acc parallel loop async(1) default(present)
         for (int ix = 0; ix < nbe; ix += 1) { 
             
             if (isice[ix]) {
@@ -67,10 +69,10 @@ void PT1(ftype* vx, ftype* vy, ftype* alpha, ftype* beta, int* index,  ftype* kv
                 ftype Localvy[3];
             
                 for (int i = 0; i < 3; i++) {
-                Localalpha[i] = alpha[ix*3+i];
-                Localbeta[i]  = beta[ix*3+i];
-                Localvx[i]    = vx[index[ix*3+i]-1];
-                Localvy[i]    = vy[index[ix*3+i]-1];
+                    Localalpha[i] = alpha[ix*3+i];
+                    Localbeta[i]  = beta[ix*3+i];
+                    Localvx[i]    = vx[index[ix*3+i]-1];
+                    Localvy[i]    = vy[index[ix*3+i]-1];
                 }
             
                 ftype dvxdx = Localvx[0]*Localalpha[0] + Localvx[1]*Localalpha[1] + Localvx[2]*Localalpha[2];
@@ -119,10 +121,10 @@ Outputs: ftype* kvx
 void PT2_x(ftype* kvx, ftype* groundedratio, ftype* areas, int* index, ftype* alpha2, ftype* vx, ftype* gr_a_alpha2, bool* isice, int nbe) {
 
     // The OpenACC copyin() clause is used to specify data that needs to be copied from the CPU to the GPU before kernel execution
-    #pragma acc enter data copyin(isice[nbe], kvx[nbe*3], groundedratio[nbe], gr_a_alpha2[3*nbe], vx[nbv], index[nbe*3])
+    #pragma acc enter data copyin(isice[:nbe], kvx[:nbe*3], groundedratio[:nbe], gr_a_alpha2[:3*nbe], vx[:nbv], index[:nbe*3])
     {
         /* The OpenACC #pragma acc parallel loop directive instructs the compiler to parallelize the loop immediately following it */
-        #pragma acc parallel loop async(1)
+        #pragma acc parallel loop async(1) default(present)
         for (int ix = 0; ix < nbe; ix += 1) { 
             /*Add basal friction*/
             if (groundedratio[ix] > 0.) {
@@ -185,10 +187,10 @@ Outputs: ftype* kvy
 void PT2_y(ftype* kvy, ftype* groundedratio, ftype* areas, int* index, ftype* alpha2, ftype* vy, ftype* gr_a_alpha2, bool* isice, int nbe) {
 
     // The OpenACC copyin() clause is used to specify data that needs to be copied from the CPU to the GPU before kernel execution
-    #pragma acc enter data copyin(isice[nbe], kvy[nbe*3], groundedratio[nbe], gr_a_alpha2[3*nbe], vy[nbv], index[nbe*3])
+    #pragma acc enter data copyin(isice[:nbe], kvy[:nbe*3], groundedratio[:nbe], gr_a_alpha2[:3*nbe], vy[:nbv], index[:nbe*3])
     {
         /* The OpenACC #pragma acc parallel loop directive instructs the compiler to parallelize the loop immediately following it */
-        #pragma acc parallel loop async(2)
+        #pragma acc parallel loop async(2) default(present)
         for (int ix = 0; ix < nbe; ix += 1) { 
             /*Add basal friction*/
             if (groundedratio[ix] > 0.) {
@@ -252,10 +254,10 @@ Outputs: ftype* KVx
 void PT3_a(ftype* kvx, ftype* kvy, ftype* Eta_nbe, ftype* eta_nbv, int* connectivity, int* columns, ftype* KVx, ftype* KVy, int nbv) {
 	
     // The OpenACC copyin() clause is used to specify data that needs to be copied from the CPU to the GPU before kernel execution
-    #pragma acc enter data copyin(KVx[nbv], KVy[nbv], kvx[nbe*3], kvy[nbe*3], eta_nbv[nbv], Eta_nbe[nbe*3], columns[nbv*8], connectivity[nbv*8])
+    #pragma acc enter data copyin(KVx[:nbv], KVy[:nbv], kvx[:nbe*3], kvy[:nbe*3], eta_nbv[:nbv], Eta_nbe[:nbe*3], columns[:nbv*8], connectivity[:nbv*8])
     {
         /* The OpenACC #pragma acc parallel loop directive instructs the compiler to parallelize the loop immediately following it */
-        #pragma acc parallel loop async(1)
+        #pragma acc parallel loop async(1) default(present)
         for (int ix = 0; ix < nbv; ix += 1) { 
 
             KVx[ix] = 0.;
@@ -302,10 +304,10 @@ void PT3_b(ftype* KVx, ftype* KVy, ftype* Fvx, ftype* Fvy, ftype* dVxdt, ftype* 
     ftype ResVy;  
 
     // The OpenACC copyin() clause is used to specify data that needs to be copied from the CPU to the GPU before kernel execution
-    #pragma acc enter data copyin(KVx[nbv], KVy[nbv], Fvx[nbv], Fvy[nbv], rho_ML[nbv], dVxdt[nbv], dVydt[nbv])
+    #pragma acc enter data copyin(KVx[:nbv], KVy[:nbv], Fvx[:nbv], Fvy[:nbv], rho_ML[:nbv], dVxdt[:nbv], dVydt[:nbv])
     {
         /* The OpenACC #pragma acc parallel loop directive instructs the compiler to parallelize the loop immediately following it */
-        #pragma acc parallel loop async(1)
+        #pragma acc parallel loop async(1) default(present)
         for (int ix = 0; ix < nbv; ix += 1) {
             /* 1. Get time derivative based on residual (dV/dt) */
             ResVx =  (-KVx[ix] + Fvx[ix])/rho_ML[ix];
@@ -332,10 +334,10 @@ Outputs: ftype* dtVx, ftype* dtVy
 void PT3_c(ftype* eta_nbv, ftype* weights, ftype* resolx, ftype* resoly, ftype rho, ftype eta_b, int nbv, ftype* dtVx, ftype* dtVy) {
 
     // The OpenACC copyin() clause is used to specify data that needs to be copied from the CPU to the GPU before kernel execution
-    #pragma acc enter data copyin(eta_nbv[nbv], weights[nbv], dtVx[nbv], dtVy[nbv], resolx[nbv], resoly[nbv])
+    #pragma acc enter data copyin(eta_nbv[:nbv], weights[:nbv], dtVx[:nbv], dtVy[:nbv], resolx[:nbv], resoly[:nbv])
     {
         /* The OpenACC #pragma acc parallel loop directive instructs the compiler to parallelize the loop immediately following it */
-        #pragma acc parallel loop async(2)
+        #pragma acc parallel loop async(2) default(present)
         for (int ix = 0; ix < nbv; ix += 1) {
             /* 2. Explicit CFL time step for viscous flow, x and y directions */
             eta_nbv[ix] = eta_nbv[ix]/weights[ix];
@@ -366,7 +368,7 @@ Outputs: ftype* dVxdt
 void PT3_d(ftype* dVxdt, ftype* dVydt, ftype* vx, ftype* vy, ftype* spcvx, ftype* spcvy, ftype relaxation, int nbv, ftype* dtVx, ftype* dtVy) {
 
     /* The OpenACC copyin() clause is used to specify data that needs to be copied from the CPU to the GPU before kernel execution */
-    #pragma acc enter data copyin(vx[nbv], vy[nbv], dVxdt[nbv], dVydt[nbv], dtVx[nbv], dtVy[nbv], spcvx[nbv], spcvy[nbv])
+    #pragma acc enter data copyin(vx[:nbv], vy[:nbv], dVxdt[:nbv], dVydt[:nbv], dtVx[:nbv], dtVy[:nbv], spcvx[:nbv], spcvy[:nbv])
     {
         /* The OpenACC #pragma acc parallel loop directive instructs the compiler to parallelize the loop immediately following it */
         #pragma acc parallel loop async(1)
@@ -444,7 +446,8 @@ int main() {
     ftype rele       = 0.03;  
     ftype eta_b      = 0.5;
     ftype eta_0      = 1.e+14/2.;
-    int   niter      = 5e6; 
+    //int   niter      = 5e6; 
+    int   niter      = 20; 
     // int   nout_iter  = 100; 
     // ftype epsi       = 3.171e-7;
     ftype relaxation = 0.99; 
@@ -759,7 +762,7 @@ int main() {
 
     ftype* gr_a_alpha2 = new ftype[nbe * 3];
 
-    for (int i = 0;i < nbe; i++) {
+    for (int i = 0; i < nbe; i++) {
         if (groundedratio[i] > 0.) {
             int n3 = i * 3;
             ftype tmp_gr_a = groundedratio[i] * areas[i];
@@ -771,7 +774,6 @@ int main() {
         }
     }
 
-    /* Performance metrics (timing) */
     // ftype time_s = 0.0;
     ftype mem = (ftype)1e-9 * (ftype)nbv * sizeof(ftype);
     // int nIO = 8;
@@ -782,12 +784,18 @@ int main() {
     // ftype iterror;
 
     // OpenACC enter data construct copyin() copies in all relevant vectors from host (CPU) to device (GPU) and create() allocates relevant vectors on device (GPU)
-    #pragma acc enter data copyin(index[nbe*3], rho_ML[nbv], gr_a_alpha2[3*nbe], vx[nbv], vy[nbv], alpha[nbe*3], beta[nbe*3], etan[nbe], rheology_B[nbe], Helem[nbe], areas[nbe], weights[nbv], ML[nbv], Fvx[nbv], Fvy[nbv], dVxdt[nbv], dVydt[nbv], dtVx[nbv], dtVy[nbv], resolx[nbv], resoly[nbv], H[nbv], spcvx[nbv], spcvy[nbv], alpha2[nbv], groundedratio[nbe], isice[nbe], connectivity[nbv*8], columns[nbv*8], device_maxvalx[GRID_Xv], device_maxvaly[GRID_Xv]) create(dvxdx[nbe], dvxdy[nbe], dvydx[nbe], dvydy[nbe], KVx[nbv], KVy[nbv], eta_nbv[nbv], Eta_nbe[nbe*3], kvx[nbe*3], kvy[nbe*3])
+    #pragma acc enter data copyin(index[:nbe*3], rho_ML[:nbv], gr_a_alpha2[:3*nbe], vx[:nbv], vy[:nbv], alpha[:nbe*3], beta[:nbe*3], etan[:nbe], rheology_B[:nbe], Helem[:nbe], \
+            areas[:nbe], weights[:nbv], ML[:nbv], Fvx[:nbv], Fvy[:nbv], dVxdt[:nbv], dVydt[:nbv], dtVx[:nbv], dtVy[:nbv], resolx[:nbv], resoly[:nbv], H[:nbv], spcvx[:nbv], spcvy[:nbv], alpha2[:nbv], \
+            groundedratio[:nbe], isice[:nbe], connectivity[:nbv*8], columns[:nbv*8], device_maxvalx[:GRID_Xv], device_maxvaly[:GRID_Xv]) \
+            create(dvxdx[:nbe], dvxdy[:nbe], dvydx[:nbe], dvydy[:nbe], KVx[:nbv], KVy[:nbv], eta_nbv[:nbv], Eta_nbe[:nbe*3], kvx[:nbe*3], kvy[:nbe*3])
 
     for (iter = 1; iter <= niter; iter++) {
       
+        /* Performance metrics (timing), TIMING IN PROGRESS
+        high_resolution_clock::time_point t1 = high_resolution_clock::now();
+        */
+
         /* Calling kernels here as normal function calls with NVTX annotations */
-        if (iter == 11)
 
             // nvtxEventAttributes_t eventAttrib_PT1 = {0};
             // eventAttrib_PT1.version = NVTX_VERSION;
@@ -815,6 +823,7 @@ int main() {
 
             PT2_x(kvx, groundedratio, areas, index, alpha2, vx, gr_a_alpha2, isice, nbe);   
             PT2_y(kvy, groundedratio, areas, index, alpha2, vy, gr_a_alpha2, isice, nbe);
+            #pragma acc wait(1,2)
             
             // nvtxRangePop();
 
@@ -845,6 +854,7 @@ int main() {
 
             PT3_b(KVx, KVy, Fvx, Fvy, dVxdt, dVydt, rho_ML, damp, nbv);
             PT3_c(eta_nbv, weights, resolx, resoly, rho, eta_b, nbv, dtVx, dtVy);
+            #pragma acc wait(1,2)
             
             // nvtxRangePop();
             
@@ -879,7 +889,7 @@ int main() {
         */  
     }
     /* OpenACC exit data construct copies out all relevant vectors */
-    #pragma acc exit data copyout(vx[nbv], vy[nbv])
+    #pragma acc exit data copyout(vx[:nbv], vy[:nbv])
 
     /* We will need to implement a CPU version for timing analysis **FIX** */
     /* 
@@ -888,8 +898,23 @@ int main() {
     float seconds = 0;
     cudaEventElapsedTime(&seconds, start, stop);
     seconds = seconds/1000.0;
-    time_s = seconds; ftype gbs = mem/time_s;
+    time_s = seconds; 
+    ftype gbs = mem/time_s;
     std::cout << "\n Perf: " << time_s << " sec. (@ " << gbs*(iter-10)*nIO << " GB/s)" << std::endl;
+    */
+
+    /* TIMING IN PROGRESS
+    high_resolution_clock::time_point t1 = high_resolution_clock::now();
+
+    std::cout << "printing out 1000 stars...\n";
+    for (int i=0; i<1000; ++i) std::cout << "*";
+    std::cout << std::endl;
+
+    high_resolution_clock::time_point t2 = high_resolution_clock::now();
+    duration<double> time_span = duration_cast<duration<double>>(t2 - t1);
+
+    std::cout << "It took me " << time_span.count() << " seconds.";
+    std::cout << std::endl;
     */
 
     /* Write output */
