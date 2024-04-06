@@ -783,6 +783,7 @@ int main() {
     int iter;
     // ftype iterror;
 
+    // Calling kernels here as normal function calls with NVTX annotations 
     // OpenACC enter data construct copyin() copies in all relevant vectors from host (CPU) to device (GPU) and create() allocates relevant vectors on device (GPU)
     #pragma acc enter data copyin(index[:nbe*3], rho_ML[:nbv], gr_a_alpha2[:3*nbe], vx[:nbv], vy[:nbv], alpha[:nbe*3], beta[:nbe*3], etan[:nbe], rheology_B[:nbe], Helem[:nbe], \
             areas[:nbe], weights[:nbv], ML[:nbv], Fvx[:nbv], Fvy[:nbv], dVxdt[:nbv], dVydt[:nbv], dtVx[:nbv], dtVy[:nbv], resolx[:nbv], resoly[:nbv], H[:nbv], spcvx[:nbv], spcvy[:nbv], alpha2[:nbv], \
@@ -791,86 +792,83 @@ int main() {
 
     for (iter = 1; iter <= niter; iter++) {
       
-        /* Performance metrics (timing), TIMING IN PROGRESS
-        high_resolution_clock::time_point t1 = high_resolution_clock::now();
-        */
+        // Performance Metrics - Timing Start
+        // high_resolution_clock::time_point t1 = high_resolution_clock::now();
 
-        /* Calling kernels here as normal function calls with NVTX annotations */
+        nvtxEventAttributes_t eventAttrib_PT1 = {0};
+        eventAttrib_PT1.version = NVTX_VERSION;
+        eventAttrib_PT1.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
+        eventAttrib_PT1.colorType = NVTX_COLOR_ARGB;
+        eventAttrib_PT1.color = 0xFFFFC0CB;
+        eventAttrib_PT1.messageType = NVTX_MESSAGE_TYPE_ASCII;
+        eventAttrib_PT1.message.ascii = "PT1";
 
-            // nvtxEventAttributes_t eventAttrib_PT1 = {0};
-            // eventAttrib_PT1.version = NVTX_VERSION;
-            // eventAttrib_PT1.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
-            // eventAttrib_PT1.colorType = NVTX_COLOR_ARGB;
-            // eventAttrib_PT1.color = 0xFFFFC0CB;
-            // eventAttrib_PT1.messageType = NVTX_MESSAGE_TYPE_ASCII;
-            // eventAttrib_PT1.message.ascii = "PT1";
+        nvtxRangePushEx(&eventAttrib_PT1);
 
-            // nvtxRangePushEx(&eventAttrib_PT1);
-
-            PT1(vx, vy, alpha, beta, index, kvx, kvy, etan, Helem, areas, isice, Eta_nbe, rheology_B, n_glen, eta_0, rele, nbe);
+        PT1(vx, vy, alpha, beta, index, kvx, kvy, etan, Helem, areas, isice, Eta_nbe, rheology_B, n_glen, eta_0, rele, nbe);
             
-            // nvtxRangePop();
+        nvtxRangePop();
 
-            // nvtxEventAttributes_t eventAttrib_PT2_xy = {0};
-            // eventAttrib_PT2_xy.version = NVTX_VERSION;
-            // eventAttrib_PT2_xy.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
-            // eventAttrib_PT2_xy.colorType = NVTX_COLOR_ARGB;
-            // eventAttrib_PT2_xy.color = 0xFF0000FF;
-            // eventAttrib_PT2_xy.messageType = NVTX_MESSAGE_TYPE_ASCII;
-            // eventAttrib_PT2_xy.message.ascii = "PT2_xy";
+        nvtxEventAttributes_t eventAttrib_PT2_xy = {0};
+        eventAttrib_PT2_xy.version = NVTX_VERSION;
+        eventAttrib_PT2_xy.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
+        eventAttrib_PT2_xy.colorType = NVTX_COLOR_ARGB;
+        eventAttrib_PT2_xy.color = 0xFF0000FF;
+        eventAttrib_PT2_xy.messageType = NVTX_MESSAGE_TYPE_ASCII;
+        eventAttrib_PT2_xy.message.ascii = "PT2_xy";
             
-            // nvtxRangePushEx(&eventAttrib_PT2_xy);
+        nvtxRangePushEx(&eventAttrib_PT2_xy);
 
-            PT2_x(kvx, groundedratio, areas, index, alpha2, vx, gr_a_alpha2, isice, nbe);   
-            PT2_y(kvy, groundedratio, areas, index, alpha2, vy, gr_a_alpha2, isice, nbe);
-            #pragma acc wait(1,2)
+        PT2_x(kvx, groundedratio, areas, index, alpha2, vx, gr_a_alpha2, isice, nbe);   
+        PT2_y(kvy, groundedratio, areas, index, alpha2, vy, gr_a_alpha2, isice, nbe);
+        #pragma acc wait(1,2)
             
-            // nvtxRangePop();
+        nvtxRangePop();
 
-            // nvtxEventAttributes_t eventAttrib_PT3_a = {0};
-            // eventAttrib_PT3_a.version = NVTX_VERSION;
-            // eventAttrib_PT3_a.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
-            // eventAttrib_PT3_a.colorType = NVTX_COLOR_ARGB;
-            // eventAttrib_PT3_a.color = 0xFF800080;
-            // eventAttrib_PT3_a.messageType = NVTX_MESSAGE_TYPE_ASCII;
-            // eventAttrib_PT3_a.message.ascii = "PT3_a";
+        nvtxEventAttributes_t eventAttrib_PT3_a = {0};
+        eventAttrib_PT3_a.version = NVTX_VERSION;
+        eventAttrib_PT3_a.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
+        eventAttrib_PT3_a.colorType = NVTX_COLOR_ARGB;
+        eventAttrib_PT3_a.color = 0xFF800080;
+        eventAttrib_PT3_a.messageType = NVTX_MESSAGE_TYPE_ASCII;
+        eventAttrib_PT3_a.message.ascii = "PT3_a";
             
-            // nvtxRangePushEx(&eventAttrib_PT3_a);
+        nvtxRangePushEx(&eventAttrib_PT3_a);
 
-            PT3_a(kvx, kvy, Eta_nbe, eta_nbv, connectivity, columns, KVx, KVy, nbv);
+        PT3_a(kvx, kvy, Eta_nbe, eta_nbv, connectivity, columns, KVx, KVy, nbv);
             
-            // nvtxRangePop();
+        nvtxRangePop();
 
-            // /* Define NVTX event attributes: PT3_bc, cyan */
-            // nvtxEventAttributes_t eventAttrib_PT3_bc = {0};
-            // eventAttrib_PT3_bc.version = NVTX_VERSION;
-            // eventAttrib_PT3_bc.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
-            // eventAttrib_PT3_bc.colorType = NVTX_COLOR_ARGB;
-            // eventAttrib_PT3_bc.color = 0xFF00FFFF;
-            // eventAttrib_PT3_bc.messageType = NVTX_MESSAGE_TYPE_ASCII;
-            // eventAttrib_PT3_bc.message.ascii = "PT3_bc";
+        /* Define NVTX event attributes: PT3_bc, cyan */
+        nvtxEventAttributes_t eventAttrib_PT3_bc = {0};
+        eventAttrib_PT3_bc.version = NVTX_VERSION;
+        eventAttrib_PT3_bc.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
+        eventAttrib_PT3_bc.colorType = NVTX_COLOR_ARGB;
+        eventAttrib_PT3_bc.color = 0xFF00FFFF;
+        eventAttrib_PT3_bc.messageType = NVTX_MESSAGE_TYPE_ASCII;
+        eventAttrib_PT3_bc.message.ascii = "PT3_bc";
             
-            // nvtxRangePushEx(&eventAttrib_PT3_bc);
+        nvtxRangePushEx(&eventAttrib_PT3_bc);
 
-            PT3_b(KVx, KVy, Fvx, Fvy, dVxdt, dVydt, rho_ML, damp, nbv);
-            PT3_c(eta_nbv, weights, resolx, resoly, rho, eta_b, nbv, dtVx, dtVy);
-            #pragma acc wait(1,2)
+        PT3_b(KVx, KVy, Fvx, Fvy, dVxdt, dVydt, rho_ML, damp, nbv);
+        PT3_c(eta_nbv, weights, resolx, resoly, rho, eta_b, nbv, dtVx, dtVy);
+        #pragma acc wait(1,2)
             
-            // nvtxRangePop();
+        nvtxRangePop();
             
-            // nvtxEventAttributes_t eventAttrib_PT3_d = {0};
-            // eventAttrib_PT3_d.version = NVTX_VERSION;
-            // eventAttrib_PT3_d.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
-            // eventAttrib_PT3_d.colorType = NVTX_COLOR_ARGB;
-            // eventAttrib_PT3_d.color = 0xFFFFA500;
-            // eventAttrib_PT3_d.messageType = NVTX_MESSAGE_TYPE_ASCII;
-            // eventAttrib_PT3_d.message.ascii = "PT3_d";
+        nvtxEventAttributes_t eventAttrib_PT3_d = {0};
+        eventAttrib_PT3_d.version = NVTX_VERSION;
+        eventAttrib_PT3_d.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
+        eventAttrib_PT3_d.colorType = NVTX_COLOR_ARGB;
+        eventAttrib_PT3_d.color = 0xFFFFA500;
+        eventAttrib_PT3_d.messageType = NVTX_MESSAGE_TYPE_ASCII;
+        eventAttrib_PT3_d.message.ascii = "PT3_d";
 
-            // nvtxRangePushEx(&eventAttrib_PT3_d);
+        nvtxRangePushEx(&eventAttrib_PT3_d);
 
-            PT3_d(dVxdt, dVydt, vx, vy, spcvx, spcvy, relaxation, nbv, dtVx, dtVy); 
+        PT3_d(dVxdt, dVydt, vx, vy, spcvx, spcvy, relaxation, nbv, dtVx, dtVy); 
             
-            // nvtxRangePop();
+        nvtxRangePop();
 
         /* This if statement is just printing iteration and error values, specifically GPU functions **FIX** */
         /* if ((iter % nout_iter) == 0) {
