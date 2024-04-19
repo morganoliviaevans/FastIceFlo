@@ -846,7 +846,6 @@ int main() {
             
         nvtxRangePop();
 
-        /* Define NVTX event attributes: PT3_bc, cyan */
         nvtxEventAttributes_t eventAttrib_PT3_bc = {0};
         eventAttrib_PT3_bc.version = NVTX_VERSION;
         eventAttrib_PT3_bc.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
