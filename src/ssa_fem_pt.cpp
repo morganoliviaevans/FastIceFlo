@@ -400,7 +400,7 @@ int main() {
     if (fid == NULL) std::cerr << "Could not open file " << inputfile << " for binary reading or writing";
 
     /* Get All we need from binary file */
-    int   nbe, nbv, M, N;
+    int   M, N;
     ftype g, rho, rho_w, yts;
     int*   index           = NULL;
     ftype* spcvx           = NULL;
@@ -792,6 +792,7 @@ int main() {
 
     /* Calling kernels here as normal function calls with NVTX annotations */
     /* OpenACC enter data construct copyin() copies in all relevant vectors from host (CPU) to device (GPU) and create() allocates relevant vectors on device (GPU) */
+
     #pragma acc enter data copyin(index[:nbe*3], rho_ML[:nbv], gr_a_alpha2[:3*nbe], vx[:nbv], vy[:nbv], alpha[:nbe*3], beta[:nbe*3], etan[:nbe], rheology_B[:nbe], Helem[:nbe], \
             areas[:nbe], weights[:nbv], ML[:nbv], Fvx[:nbv], Fvy[:nbv], dVxdt[:nbv], dVydt[:nbv], dtVx[:nbv], dtVy[:nbv], resolx[:nbv], resoly[:nbv], H[:nbv], spcvx[:nbv], spcvy[:nbv], alpha2[:nbv], \
             groundedratio[:nbe], isice[:nbe], connectivity[:nbv*8], columns[:nbv*8], device_maxvalx[:GRID_Xv], device_maxvaly[:GRID_Xv]) \
@@ -801,6 +802,16 @@ int main() {
 
         /* Performance Metrics - Iteration Timing Start */
         auto iteration_start = high_resolution_clock::now();
+
+        nvtxEventAttributes_t eventAttrib_PT1 = {0};
+        eventAttrib_PT1.version = NVTX_VERSION;
+        eventAttrib_PT1.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
+        eventAttrib_PT1.colorType = NVTX_COLOR_ARGB;
+        eventAttrib_PT1.color = 0xFFFFC0CB;
+        eventAttrib_PT1.messageType = NVTX_MESSAGE_TYPE_ASCII;
+        eventAttrib_PT1.message.ascii = "PT1";
+
+        nvtxRangePushEx(&eventAttrib_PT1);
 
         nvtxEventAttributes_t eventAttrib_PT1 = {0};
         eventAttrib_PT1.version = NVTX_VERSION;
