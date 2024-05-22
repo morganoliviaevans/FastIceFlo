@@ -7,7 +7,7 @@
 #SBATCH --ntasks=1
 #SBATCH --output=%x.%j.txt
 #This slurm script for NVIDIA V100
-#Optimal PT solver parameter values for the glacier model configuration and the corresponding DoFs. In this case for JKS8e4
+#Optimal PT solver parameter values for the glacier model configuration and the corresponding DoFs.
 damp=0.998;
 visc_rela=0.01;
 vel_rela=0.995;
