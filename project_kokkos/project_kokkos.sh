@@ -6,7 +6,7 @@
 #SBATCH --time=00:60:00
 #SBATCH --ntasks=1
 #SBATCH --output=%x.%j.txt
-
+#This slurm script for NVIDIA V100
 #Optimal PT solver parameter values for the glacier model configuration and the corresponding DoFs. In this case for JKS8e4
 damp=0.998;
 visc_rela=0.01;
@@ -27,3 +27,4 @@ echo "Job ended at $(date)"
 #Generate NSIGHT Compute report
 #To avoid generating large-sized (in Bytes) reports, run up to 2 iterations
 #ncu --set full --import-source yes -o report ./project_kokkos;
+
